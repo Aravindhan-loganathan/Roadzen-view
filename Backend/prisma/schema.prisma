@@ -1,0 +1,113 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// 1. User Management (for AuthContext)
+enum Role {
+  ADMIN
+  USER
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  password  String   // Hashed password
+  name      String?
+  role      Role     @default(USER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// 2. Traffic Signals & Junctions (Matches 'junctions' and 'mapMarkers' in mockData)
+enum CongestionLevel {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+model TrafficSignal {
+  id             Int             @id @default(autoincrement())
+  name           String          // e.g., "MG Road Junction"
+  latitude       Float
+  longitude      Float
+  currentGreen   String?         // Direction e.g., "North"
+  countdown      Int             @default(0)
+  congestionLevel CongestionLevel @default(LOW)
+  status         String          @default("active") // active, maintenance
+  
+  // Relations
+  lanes          Lane[]
+  violations     Violation[]
+  alerts         EmergencyAlert[]
+  logs           TrafficLog[]
+
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+}
+
+// 3. Lane Analytics (Matches 'laneData' in mockData)
+model Lane {
+  id              Int             @id @default(autoincrement())
+  name            String          // e.g., "Lane 1 - North"
+  vehicleCount    Int             @default(0)
+  density         Float           @default(0.0)
+  status          CongestionLevel @default(LOW)
+  
+  signalId        Int
+  signal          TrafficSignal   @relation(fields: [signalId], references: [id])
+
+  updatedAt       DateTime        @updatedAt
+}
+
+// 4. Violations (Matches 'violations' in mockData)
+enum ViolationStatus {
+  PENDING
+  ISSUED
+  PAID
+}
+
+model Violation {
+  id            String          @id @default(uuid()) // Uses UUID instead of 'VIO-001' for DB generation
+  type          String          // e.g., "Signal Jump", "Over Speeding"
+  vehicleNumber String
+  fineAmount    Float
+  status        ViolationStatus @default(PENDING)
+  imageUrl      String?         // URL to evidence image
+  timestamp     DateTime        @default(now())
+  
+  locationText  String?         // Fallback location name
+  signalId      Int?
+  signal        TrafficSignal?  @relation(fields: [signalId], references: [id])
+}
+
+// 5. Emergency Alerts (Matches 'emergencyAlerts' in mockData)
+model EmergencyAlert {
+  id           Int       @id @default(autoincrement())
+  type         String    // e.g., "ambulance", "firetruck"
+  title        String
+  locationText String
+  eta          String?   // e.g., "2 min"
+  priority     String    // "high", "medium"
+  timestamp    DateTime  @default(now())
+  isResolved   Boolean   @default(false)
+
+  signalId     Int?
+  signal       TrafficSignal? @relation(fields: [signalId], references: [id])
+}
+
+// 6. Analytics History (For 'hourlyTrafficData' charts)
+model TrafficLog {
+  id           Int      @id @default(autoincrement())
+  vehicleCount Int
+  timestamp    DateTime @default(now())
+  
+  signalId     Int
+  signal       TrafficSignal @relation(fields: [signalId], references: [id])
+}
