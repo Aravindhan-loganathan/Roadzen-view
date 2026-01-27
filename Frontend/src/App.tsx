@@ -12,6 +12,7 @@ import { AdminLayout } from "@/components/layout/AdminLayout";
 
 // Pages
 import { LoginPage } from "@/pages/LoginPage";
+import { RegisterPage } from "@/pages/RegisterPage";
 import { PublicHome } from "@/pages/public/PublicHome";
 import { LiveMap } from "@/pages/public/LiveMap";
 import { SignalStatus } from "@/pages/public/SignalStatus";
@@ -53,6 +54,7 @@ const App = () => (
               
               {/* Authentication */}
               <Route path="/login" element={<LoginPage />} />
+              <Route path="/register" element={<RegisterPage />} />
 
               {/* Public User Routes */}
               <Route path="/public" element={<PublicLayout />}>

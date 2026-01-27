@@ -6,18 +6,17 @@ import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 
-export const LoginPage: React.FC = () => {
+export const RegisterPage: React.FC = () => {
   const [role, setRole] = useState<UserRole>('user');
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  const { login } = useAuth();
+  const { register } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -26,17 +25,17 @@ export const LoginPage: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const success = await login(email, password, role);
+      const success = await register(name, email, password, role);
       if (success) {
         toast({
-          title: 'Welcome back!',
-          description: `Logged in as ${role === 'admin' ? 'Administrator' : 'User'}`,
+          title: 'Registration successful!',
+          description: 'You can now sign in with your credentials.',
         });
-        navigate(role === 'admin' ? '/admin' : '/public');
+        navigate('/login');
       } else {
         toast({
-          title: 'Login failed',
-          description: 'Please check your credentials',
+          title: 'Registration failed',
+          description: 'User may already exist or server error.',
           variant: 'destructive',
         });
       }
@@ -69,9 +68,9 @@ export const LoginPage: React.FC = () => {
         <div className="w-full max-w-md space-y-8 animate-fade-in">
           {/* Title */}
           <div className="text-center space-y-2">
-            <h1 className="text-3xl font-display font-bold">Welcome Back</h1>
+            <h1 className="text-3xl font-display font-bold">Create Account</h1>
             <p className="text-muted-foreground">
-              Sign in to access the traffic management system
+              Join the traffic management system
             </p>
           </div>
 
@@ -107,8 +106,21 @@ export const LoginPage: React.FC = () => {
             </button>
           </div>
 
-          {/* Login Form */}
+          {/* Register Form */}
           <form onSubmit={handleSubmit} className="space-y-5">
+            <div className="space-y-2">
+              <Label htmlFor="name">Full Name</Label>
+              <Input
+                id="name"
+                type="text"
+                placeholder="John Doe"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+                className="h-12"
+              />
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="email">Email Address</Label>
               <Input
@@ -128,7 +140,7 @@ export const LoginPage: React.FC = () => {
                 <Input
                   id="password"
                   type={showPassword ? 'text' : 'password'}
-                  placeholder="Enter your password"
+                  placeholder="Create a password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
@@ -144,22 +156,6 @@ export const LoginPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="remember"
-                  checked={rememberMe}
-                  onCheckedChange={(checked) => setRememberMe(checked as boolean)}
-                />
-                <Label htmlFor="remember" className="text-sm text-muted-foreground cursor-pointer">
-                  Remember me
-                </Label>
-              </div>
-              <button type="button" className="text-sm text-primary hover:underline">
-                Forgot password?
-              </button>
-            </div>
-
             <Button
               type="submit"
               disabled={isLoading}
@@ -168,27 +164,21 @@ export const LoginPage: React.FC = () => {
               {isLoading ? (
                 <>
                   <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                  Signing in...
+                  Creating account...
                 </>
               ) : (
-                `Sign in as ${role === 'admin' ? 'Admin' : 'User'}`
+                'Sign Up'
               )}
             </Button>
 
             <div className="text-center text-sm">
-              <span className="text-muted-foreground">Don't have an account? </span>
-              <Link to="/register" className="text-primary hover:underline font-medium">
-                Sign up
+              <span className="text-muted-foreground">Already have an account? </span>
+              <Link to="/login" className="text-primary hover:underline font-medium">
+                Sign in
               </Link>
             </div>
           </form>
         </div>
-      </div>
-
-      {/* Background Decoration */}
-      <div className="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
-        <div className="absolute -top-1/4 -right-1/4 w-1/2 h-1/2 bg-primary/5 rounded-full blur-3xl" />
-        <div className="absolute -bottom-1/4 -left-1/4 w-1/2 h-1/2 bg-primary/5 rounded-full blur-3xl" />
       </div>
     </div>
   );
