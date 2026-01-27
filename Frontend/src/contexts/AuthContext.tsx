@@ -24,25 +24,48 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   });
 
   const login = useCallback(async (email: string, password: string, role: UserRole): Promise<boolean> => {
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 800));
-    
-    if (email && password && role) {
-      const newUser: User = {
-        email,
-        role,
-        name: role === 'admin' ? 'Admin User' : 'John Doe',
-      };
-      setUser(newUser);
-      localStorage.setItem('traffic_user', JSON.stringify(newUser));
-      return true;
+    try {
+      const response = await fetch('http://localhost:3000/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        
+        // Map backend role to frontend role (handle 'public' -> 'user')
+        const mappedRole: UserRole = data.user.role === 'admin' ? 'admin' : 'user';
+
+        // Verify that the authenticated user's role matches the selected role
+        if (role && mappedRole !== role) {
+          return false;
+        }
+
+        const newUser: User = {
+          email: data.user.email,
+          role: mappedRole,
+          name: data.user.name,
+        };
+        
+        setUser(newUser);
+        localStorage.setItem('traffic_user', JSON.stringify(newUser));
+        localStorage.setItem('traffic_token', data.token);
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Login request failed:', error);
+      return false;
     }
-    return false;
   }, []);
 
   const logout = useCallback(() => {
     setUser(null);
     localStorage.removeItem('traffic_user');
+    localStorage.removeItem('traffic_token');
   }, []);
 
   return (

@@ -175,11 +175,6 @@ export const LoginPage: React.FC = () => {
               )}
             </Button>
           </form>
-
-          {/* Demo Hint */}
-          <p className="text-center text-sm text-muted-foreground">
-            Demo: Use any email and password to login
-          </p>
         </div>
       </div>
 
