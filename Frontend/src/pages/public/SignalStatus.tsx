@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Radio, RefreshCw } from 'lucide-react';
-import { junctions } from '@/data/mockData';
+import { Radio, RefreshCw, Loader2 } from 'lucide-react';
 import { TrafficSignal } from '@/components/ui/TrafficSignal';
 
 interface JunctionData {
@@ -12,11 +11,30 @@ interface JunctionData {
 }
 
 export const SignalStatus: React.FC = () => {
-  const [signalData, setSignalData] = useState<JunctionData[]>(junctions);
+  const [signalData, setSignalData] = useState<JunctionData[]>([]);
+  const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState(new Date());
 
-  // Auto-refresh every 5 seconds
+  const fetchSignals = async () => {
+    try {
+      const response = await fetch('http://localhost:3000/api/signals');
+      if (response.ok) {
+        const data = await response.json();
+        setSignalData(data);
+        setLastRefresh(new Date());
+      }
+    } catch (error) {
+      console.error('Failed to fetch signals:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
+    // Initial fetch
+    fetchSignals();
+
+    // Local countdown simulation (smooth UI)
     const interval = setInterval(() => {
       setSignalData(prev =>
         prev.map(junction => ({
@@ -29,15 +47,22 @@ export const SignalStatus: React.FC = () => {
       );
     }, 1000);
 
-    const refreshInterval = setInterval(() => {
-      setLastRefresh(new Date());
-    }, 5000);
+    // Sync with backend every 10 seconds
+    const syncInterval = setInterval(fetchSignals, 10000);
 
     return () => {
       clearInterval(interval);
-      clearInterval(refreshInterval);
+      clearInterval(syncInterval);
     };
   }, []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   const getCongestionStyle = (level: string) => {
     switch (level) {

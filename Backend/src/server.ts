@@ -4,6 +4,8 @@ import cors from 'cors';
 import pool from './config/db';
 import authRoutes from './routes/authRoutes';
 import dashboardRoutes from './routes/dashboardRoutes';
+import signalRoutes from './routes/signalRoutes';
+import alertRoutes from './routes/alertRoutes';
 import createTables from './db/setup';
 
 // Load environment variables
@@ -22,6 +24,8 @@ createTables();
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/signals', signalRoutes);
+app.use('/api/alerts', alertRoutes);
 
 // Basic Route
 app.get('/', (req: Request, res: Response) => {

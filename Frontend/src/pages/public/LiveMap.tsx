@@ -1,18 +1,55 @@
-import React, { useState } from 'react';
-import { Search, Navigation, Clock, MapPin, Route } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Search, Navigation, Clock, MapPin, Route, Loader2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { mapMarkers } from '@/data/mockData';
+
+interface MapMarker {
+  id: number;
+  lat: number;
+  lng: number;
+  name: string;
+  traffic: string;
+}
 
 export const LiveMap: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRoute, setSelectedRoute] = useState<number | null>(null);
+  const [markers, setMarkers] = useState<MapMarker[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const suggestedRoutes = [
     { id: 1, name: 'Via Ring Road', time: '25 min', distance: '12.5 km', traffic: 'light' },
     { id: 2, name: 'Via Old Airport Road', time: '35 min', distance: '10.2 km', traffic: 'moderate' },
     { id: 3, name: 'Via Koramangala', time: '45 min', distance: '9.8 km', traffic: 'heavy' },
   ];
+
+  useEffect(() => {
+    const fetchMarkers = async () => {
+      try {
+        const response = await fetch('http://localhost:3000/api/signals');
+        if (response.ok) {
+          const data = await response.json();
+          // Map backend data to frontend marker format
+          const mappedMarkers = data.map((signal: any) => ({
+            id: signal.id,
+            lat: signal.lat || 12.9716, // Fallback if null
+            lng: signal.lng || 77.5946,
+            name: signal.name,
+            traffic: signal.congestionLevel
+          }));
+          setMarkers(mappedMarkers);
+        }
+      } catch (error) {
+        console.error('Error fetching map markers:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchMarkers();
+    const interval = setInterval(fetchMarkers, 10000); // Refresh every 10s
+    return () => clearInterval(interval);
+  }, []);
 
   const getTrafficColor = (traffic: string) => {
     switch (traffic) {
@@ -26,6 +63,14 @@ export const LiveMap: React.FC = () => {
         return 'bg-destructive';
     }
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[600px]">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -144,7 +189,7 @@ export const LiveMap: React.FC = () => {
             </div>
 
             {/* Traffic Signal Markers */}
-            {mapMarkers.map((marker, index) => (
+            {markers.map((marker, index) => (
               <div
                 key={marker.id}
                 className="absolute transform -translate-x-1/2 -translate-y-1/2 animate-fade-in"

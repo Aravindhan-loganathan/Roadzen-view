@@ -7,7 +7,7 @@ export const getDashboardSummary = async (req: Request, res: Response) => {
     const [signalsRes, violationsRes, alertsRes] = await Promise.all([
       pool.query('SELECT congestion_level FROM traffic_signals'),
       pool.query('SELECT COUNT(*) FROM violations'),
-      pool.query('SELECT COUNT(*) FROM emergency_alerts WHERE status = $1', ['ACTIVE'])
+      pool.query('SELECT * FROM emergency_alerts WHERE status = $1', ['ACTIVE'])
     ]);
 
     const signals = signalsRes.rows;
@@ -19,10 +19,17 @@ export const getDashboardSummary = async (req: Request, res: Response) => {
     const smoothRoads = signals.filter(s => s.congestion_level === 'LOW').length;
     
     const totalViolations = parseInt(violationsRes.rows[0].count);
-    const activeAlerts = parseInt(alertsRes.rows[0].count);
+    const activeAlertsCount = alertsRes.rows.length;
+    
+    // Check for high priority alerts (ambulance/firetruck)
+    const hasHighPriorityAlert = alertsRes.rows.some((a: any) => 
+      ['ambulance', 'firetruck'].includes(a.type.toLowerCase())
+    );
 
     // Mocking total vehicles for now (or you can add a 'lanes' table later)
     const totalVehicles = 12450; 
+    // Mock congested lanes based on heavy traffic signals
+    const congestedLanes = heavyTraffic * 2 + moderateTraffic;
 
     res.json({
       totalVehicles,
@@ -31,7 +38,9 @@ export const getDashboardSummary = async (req: Request, res: Response) => {
       moderateTraffic,
       smoothRoads,
       totalViolations,
-      emergencyEvents: activeAlerts
+      emergencyEvents: activeAlertsCount,
+      congestedLanes,
+      hasHighPriorityAlert
     });
   } catch (error) {
     console.error('Dashboard Summary Error:', error);
@@ -43,12 +52,22 @@ export const getHourlyTraffic = async (req: Request, res: Response) => {
   // In a real app, this would query a 'traffic_logs' table grouped by hour
   // Returning mock data compatible with the frontend chart
   const mockHourly = [
-    { hour: '06:00', vehicles: 120 },
-    { hour: '09:00', vehicles: 850 },
-    { hour: '12:00', vehicles: 600 },
-    { hour: '15:00', vehicles: 450 },
-    { hour: '18:00', vehicles: 900 },
-    { hour: '21:00', vehicles: 300 },
+    { hour: '6 AM', vehicles: 1200 },
+    { hour: '7 AM', vehicles: 3500 },
+    { hour: '8 AM', vehicles: 5800 },
+    { hour: '9 AM', vehicles: 6200 },
+    { hour: '10 AM', vehicles: 4100 },
+    { hour: '11 AM', vehicles: 3800 },
+    { hour: '12 PM', vehicles: 4200 },
+    { hour: '1 PM', vehicles: 4500 },
+    { hour: '2 PM', vehicles: 4000 },
+    { hour: '3 PM', vehicles: 4300 },
+    { hour: '4 PM', vehicles: 5200 },
+    { hour: '5 PM', vehicles: 6800 },
+    { hour: '6 PM', vehicles: 7200 },
+    { hour: '7 PM', vehicles: 5500 },
+    { hour: '8 PM', vehicles: 3200 },
+    { hour: '9 PM', vehicles: 2100 },
   ];
   res.json(mockHourly);
 };

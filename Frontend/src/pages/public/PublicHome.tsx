@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Car,
@@ -9,9 +9,9 @@ import {
   CheckCircle,
   Minus,
   XCircle,
+  Loader2,
 } from 'lucide-react';
 import { StatusCard } from '@/components/ui/StatusCard';
-import { trafficSummary, hourlyTrafficData, emergencyAlerts } from '@/data/mockData';
 import { Button } from '@/components/ui/button';
 import {
   AreaChart,
@@ -23,13 +23,68 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 
+interface DashboardData {
+  totalVehicles: number;
+  activeCameras: number;
+  heavyTraffic: number;
+  moderateTraffic: number;
+  smoothRoads: number;
+  totalViolations: number;
+  emergencyEvents: number;
+  congestedLanes: number;
+  hasHighPriorityAlert: boolean;
+}
+
+interface HourlyData {
+  hour: string;
+  vehicles: number;
+}
+
 export const PublicHome: React.FC = () => {
-  const hasEmergency = emergencyAlerts.some(a => a.priority === 'high');
+  const [data, setData] = useState<DashboardData | null>(null);
+  const [hourlyData, setHourlyData] = useState<HourlyData[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [summaryRes, hourlyRes] = await Promise.all([
+          fetch('http://localhost:3000/api/dashboard/summary'),
+          fetch('http://localhost:3000/api/dashboard/hourly')
+        ]);
+
+        if (summaryRes.ok && hourlyRes.ok) {
+          const summary = await summaryRes.json();
+          const hourly = await hourlyRes.json();
+          setData(summary);
+          setHourlyData(hourly);
+        }
+      } catch (error) {
+        console.error('Error fetching dashboard data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+    const interval = setInterval(fetchData, 30000); // Refresh every 30s
+    return () => clearInterval(interval);
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!data) return null;
 
   return (
     <div className="space-y-6">
       {/* Emergency Banner */}
-      {hasEmergency && (
+      {data.hasHighPriorityAlert && (
         <div className="gradient-bg rounded-xl p-4 flex items-center justify-between animate-pulse-glow">
           <div className="flex items-center gap-3">
             <AlertTriangle className="w-6 h-6 text-primary-foreground" />
@@ -68,7 +123,7 @@ export const PublicHome: React.FC = () => {
           </div>
           <div>
             <p className="text-sm text-muted-foreground">Smooth Roads</p>
-            <p className="text-3xl font-display font-bold">{trafficSummary.smoothRoads}</p>
+            <p className="text-3xl font-display font-bold">{data.smoothRoads}</p>
           </div>
         </div>
         <div className="glow-card p-6 flex items-center gap-4 animate-fade-in" style={{ animationDelay: '100ms' }}>
@@ -77,7 +132,7 @@ export const PublicHome: React.FC = () => {
           </div>
           <div>
             <p className="text-sm text-muted-foreground">Moderate Traffic</p>
-            <p className="text-3xl font-display font-bold">{trafficSummary.moderateTraffic}</p>
+            <p className="text-3xl font-display font-bold">{data.moderateTraffic}</p>
           </div>
         </div>
         <div className="glow-card p-6 flex items-center gap-4 animate-fade-in" style={{ animationDelay: '200ms' }}>
@@ -86,7 +141,7 @@ export const PublicHome: React.FC = () => {
           </div>
           <div>
             <p className="text-sm text-muted-foreground">Heavy Traffic</p>
-            <p className="text-3xl font-display font-bold">{trafficSummary.heavyTraffic}</p>
+            <p className="text-3xl font-display font-bold">{data.heavyTraffic}</p>
           </div>
         </div>
       </div>
@@ -97,20 +152,20 @@ export const PublicHome: React.FC = () => {
         <div className="space-y-4">
           <StatusCard
             title="Total Vehicles Today"
-            value={trafficSummary.totalVehicles}
+            value={data.totalVehicles}
             icon={Car}
             trend={{ value: 12, isPositive: true }}
           />
           <StatusCard
             title="Congested Lanes"
-            value={trafficSummary.congestedLanes}
+            value={data.congestedLanes}
             icon={TrendingUp}
             variant="warning"
             trend={{ value: 5, isPositive: false }}
           />
           <StatusCard
             title="Emergency Events"
-            value={trafficSummary.emergencyEvents}
+            value={data.emergencyEvents}
             icon={AlertTriangle}
             variant="danger"
           />
@@ -129,7 +184,7 @@ export const PublicHome: React.FC = () => {
             </div>
           </div>
           <ResponsiveContainer width="100%" height={280}>
-            <AreaChart data={hourlyTrafficData}>
+            <AreaChart data={hourlyData}>
               <defs>
                 <linearGradient id="colorVehicles" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />

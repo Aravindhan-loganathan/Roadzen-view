@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   AlertTriangle,
   Ambulance,
@@ -8,16 +8,49 @@ import {
   Bell,
   Clock,
   MapPin,
+  Loader2,
 } from 'lucide-react';
-import { emergencyAlerts } from '@/data/mockData';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 
+interface Alert {
+  id: number;
+  type: string;
+  title: string;
+  location: string;
+  eta: string | null;
+  priority: string;
+  timestamp: string;
+}
+
 export const AlertsPage: React.FC = () => {
+  const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [loading, setLoading] = useState(true);
+
   const roadClosures = [
     { id: 1, location: 'MG Road (Sector 5)', reason: 'Road Maintenance', duration: '2 hours' },
     { id: 2, location: 'Outer Ring Road', reason: 'Accident Clearance', duration: '30 mins' },
   ];
+
+  useEffect(() => {
+    const fetchAlerts = async () => {
+      try {
+        const response = await fetch('http://localhost:3000/api/alerts');
+        if (response.ok) {
+          const data = await response.json();
+          setAlerts(data);
+        }
+      } catch (error) {
+        console.error('Error fetching alerts:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchAlerts();
+    const interval = setInterval(fetchAlerts, 10000);
+    return () => clearInterval(interval);
+  }, []);
 
   const getAlertIcon = (type: string) => {
     switch (type) {
@@ -56,6 +89,14 @@ export const AlertsPage: React.FC = () => {
     }
   };
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -93,7 +134,7 @@ export const AlertsPage: React.FC = () => {
           Active Emergency Vehicles
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {emergencyAlerts
+          {alerts
             .filter(a => a.type === 'ambulance' || a.type === 'firetruck')
             .map((alert, index) => (
               <div
@@ -140,7 +181,7 @@ export const AlertsPage: React.FC = () => {
           Accidents & Incidents
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {emergencyAlerts
+          {alerts
             .filter(a => a.type === 'accident')
             .map((alert, index) => (
               <div
