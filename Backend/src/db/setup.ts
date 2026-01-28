@@ -118,18 +118,35 @@ const createTables = async () => {
     await pool.query(`ALTER TABLE emergency_alerts ADD COLUMN IF NOT EXISTS title VARCHAR(255)`);
     await pool.query(`ALTER TABLE emergency_alerts ADD COLUMN IF NOT EXISTS eta VARCHAR(50)`);
     await pool.query(`ALTER TABLE emergency_alerts ADD COLUMN IF NOT EXISTS priority VARCHAR(50) DEFAULT 'medium'`);
+    await pool.query(`ALTER TABLE emergency_alerts ADD COLUMN IF NOT EXISTS latitude DECIMAL(10, 6)`);
+    await pool.query(`ALTER TABLE emergency_alerts ADD COLUMN IF NOT EXISTS longitude DECIMAL(10, 6)`);
+    await pool.query(`ALTER TABLE emergency_alerts ADD COLUMN IF NOT EXISTS impact VARCHAR(255)`);
 
     // Seed Alerts if empty
     const alertsCheck = await pool.query('SELECT COUNT(*) FROM emergency_alerts');
     if (parseInt(alertsCheck.rows[0].count) === 0) {
       const seedAlerts = `
-        INSERT INTO emergency_alerts (type, location, status, title, eta, priority) VALUES
-        ('ambulance', 'MG Road towards Hospital', 'ACTIVE', 'Ambulance Detected', '2 min', 'high'),
-        ('firetruck', 'Brigade Road Junction', 'ACTIVE', 'Fire Truck Approaching', '5 min', 'high'),
-        ('accident', 'Outer Ring Road, Marathahalli', 'ACTIVE', 'Accident Reported', NULL, 'medium');
+        INSERT INTO emergency_alerts (type, location, status, title, eta, priority, latitude, longitude, impact) VALUES
+        ('ambulance', 'MG Road towards Hospital', 'ACTIVE', 'Ambulance Detected', '2 min', 'high', 12.9716, 77.5946, 'Traffic halted for 2 mins'),
+        ('firetruck', 'Brigade Road Junction', 'ACTIVE', 'Fire Truck Approaching', '5 min', 'high', 12.9698, 77.6075, 'Lane 2 blocked'),
+        ('accident', 'Outer Ring Road, Marathahalli', 'ACTIVE', 'Accident Reported', NULL, 'medium', 12.9352, 77.6245, 'Avg speed reduced to 15km/h');
       `;
       await pool.query(seedAlerts);
       console.log('✅ Seeded emergency alerts data');
+    }
+
+    // Seed Additional Alerts (Closures/Weather)
+    const closureCheck = await pool.query("SELECT COUNT(*) FROM emergency_alerts WHERE type = 'closure'");
+    if (parseInt(closureCheck.rows[0].count) === 0) {
+      const seedMoreAlerts = `
+        INSERT INTO emergency_alerts (type, location, status, title, eta, priority, latitude, longitude, impact) VALUES
+        ('closure', 'Anna Flyover', 'ACTIVE', 'Scheduled Maintenance', NULL, 'medium', 13.0626, 80.2644, 'Closed 11 PM - 5 AM'),
+        ('closure', 'Kathipara Service Lane', 'ACTIVE', 'Drainage Work', NULL, 'low', 13.0096, 80.2034, 'Lane restriction'),
+        ('weather', 'Marina Beach Loop', 'ACTIVE', 'Water Logging', NULL, 'high', 13.0450, 80.2750, 'Avoid route'),
+        ('accident', 'GST Road near Airport', 'ACTIVE', 'Multi-vehicle Collision', NULL, 'high', 12.9800, 80.1600, 'Traffic halted');
+      `;
+      await pool.query(seedMoreAlerts);
+      console.log('✅ Seeded additional emergency alerts data');
     }
 
     // Seed Traffic Signals if empty

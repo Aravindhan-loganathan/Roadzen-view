@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Navigation, Clock, MapPin, Route, Loader2 } from 'lucide-react';
+import { Search, Navigation, Clock, MapPin, Route, Loader2, AlertTriangle } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap, useMapEvents } from 'react-leaflet';
 import { divIcon } from 'leaflet';
+import { useLocation } from 'react-router-dom';
 
 interface MapMarker {
   id: number;
@@ -20,7 +21,24 @@ interface RouteInfo {
   distance: string;
   traffic: string;
   path: [number, number][];
+  penalty?: number;
 }
+
+const deg2rad = (deg: number) => {
+  return deg * (Math.PI / 180);
+};
+
+const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+  const R = 6371; // Radius of the earth in km
+  const dLat = deg2rad(lat2 - lat1);
+  const dLon = deg2rad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c; // Distance in km
+};
 
 export const LiveMap: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -35,6 +53,7 @@ export const LiveMap: React.FC = () => {
   const [activeInput, setActiveInput] = useState<'source' | 'destination'>('source');
   const [sourceSuggestions, setSourceSuggestions] = useState<MapMarker[]>([]);
   const [destinationSuggestions, setDestinationSuggestions] = useState<MapMarker[]>([]);
+  const location = useLocation();
 
   useEffect(() => {
     const fetchMarkers = async () => {
@@ -127,21 +146,59 @@ export const LiveMap: React.FC = () => {
       const data = await response.json();
 
       if (data.code === 'Ok' && data.routes) {
-        const routes: RouteInfo[] = data.routes.map((route: any, index: number) => {
+        const routesWithAnalysis = data.routes.map((route: any) => {
           // OSRM returns coordinates as [longitude, latitude], Leaflet needs [latitude, longitude]
           const path = route.geometry.coordinates.map((coord: [number, number]) => [coord[1], coord[0]] as [number, number]);
-          const traffic = route.duration > 2000 ? 'heavy' : route.duration > 1000 ? 'moderate' : 'light';
           
+          // Congestion Analysis (Smart Penalty System)
+          let congestionPenalty = 0;
+          let congestionLevel = 'light';
+
+          // Check for high congestion signals along the route
+          markers.forEach(marker => {
+             // Check if route passes near this marker (within ~300m)
+             const isNear = path.some((point: [number, number]) => {
+                return getDistance(point[0], point[1], marker.lat, marker.lng) < 0.3;
+             });
+
+             if (isNear) {
+                const traffic = marker.traffic ? marker.traffic.toLowerCase() : 'low';
+                if (traffic === 'high' || traffic === 'heavy') {
+                   congestionPenalty += 10; // 10 min penalty for high congestion
+                } else if (traffic === 'medium' || traffic === 'moderate') {
+                   congestionPenalty += 5; // 5 min penalty for medium congestion
+                }
+             }
+          });
+
+          // Determine overall route traffic status
+          if (congestionPenalty >= 15) congestionLevel = 'heavy';
+          else if (congestionPenalty >= 5) congestionLevel = 'moderate';
+
+          // Calculate adjusted duration
+          const baseDurationMins = Math.round(route.duration / 60);
+          const totalDurationMins = baseDurationMins + congestionPenalty;
+
           return {
-            id: index + 1,
-            name: `Route ${index + 1}`,
-            time: `${Math.round(route.duration / 60)} min`,
+            time: `${totalDurationMins} min`,
             distance: `${(route.distance / 1000).toFixed(1)} km`,
-            traffic: traffic,
+            traffic: congestionLevel,
             path: path,
+            penalty: congestionPenalty
           };
         });
-        setSuggestedRoutes(routes);
+
+        // Sort by time (smart routing prefers lowest adjusted time)
+        routesWithAnalysis.sort((a: any, b: any) => parseInt(a.time) - parseInt(b.time));
+
+        // Assign names based on rank
+        const finalRoutes: RouteInfo[] = routesWithAnalysis.map((r: any, i: number) => ({
+            ...r,
+            id: i + 1,
+            name: i === 0 ? (r.penalty === 0 ? 'Fastest Route' : 'Best Available') : `Alternative ${i}`,
+        }));
+
+        setSuggestedRoutes(finalRoutes);
         setShowRoutes(true);
       } else {
         console.error("Error fetching routes from OSRM:", data.message);
@@ -234,6 +291,17 @@ export const LiveMap: React.FC = () => {
     return null;
   };
 
+  // Component to handle recentering from navigation state (e.g. from Alerts page)
+  const RecenterMap = ({ center, zoom }: { center?: [number, number]; zoom?: number }) => {
+    const map = useMap();
+    useEffect(() => {
+      if (center) {
+        map.setView(center, zoom || 15);
+      }
+    }, [center, zoom, map]);
+    return null;
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -320,6 +388,12 @@ export const LiveMap: React.FC = () => {
               <Route className="w-4 h-4" />
               Suggested Routes
             </h3>
+            {suggestedRoutes.every(r => r.traffic === 'heavy') && (
+               <div className="mb-3 p-2 bg-destructive/10 border border-destructive/20 rounded text-xs text-destructive flex items-center gap-2">
+                 <AlertTriangle className="w-3 h-3" />
+                 High congestion on all routes.
+               </div>
+            )}
             <div className="space-y-2">
               {suggestedRoutes.map((route) => (
                 <button
@@ -339,6 +413,11 @@ export const LiveMap: React.FC = () => {
                     <span className="flex items-center gap-1">
                       <Clock className="w-3 h-3" />
                       {route.time}
+                      {route.penalty !== undefined && route.penalty > 0 && (
+                        <span className="text-destructive font-medium ml-1">
+                          (+{route.penalty}m delay)
+                        </span>
+                      )}
                     </span>
                     <span>{route.distance}</span>
                   </div>
@@ -352,6 +431,7 @@ export const LiveMap: React.FC = () => {
         {/* Map Container */}
         <div className="lg:col-span-3 glow-card overflow-hidden min-h-[500px] lg:min-h-[600px] z-0">
           <MapContainer center={[13.03, 80.24]} zoom={12} scrollWheelZoom={true} className="w-full h-full">
+            <RecenterMap center={location.state?.center} zoom={location.state?.zoom} />
             <MapClickHandler />
             <TileLayer
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
