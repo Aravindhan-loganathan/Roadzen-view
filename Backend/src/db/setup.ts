@@ -67,6 +67,50 @@ const createTables = async () => {
     `;
     await pool.query(updateCoords);
 
+    // Seed Chennai Traffic Signals
+    const chennaiSignalsCheck = await pool.query("SELECT COUNT(*) FROM traffic_signals WHERE location = 'Anna Salai Junction'");
+    if (parseInt(chennaiSignalsCheck.rows[0].count) === 0) {
+      const seedChennai = `
+        INSERT INTO traffic_signals (location, congestion_level, current_green, countdown, latitude, longitude) VALUES
+        ('Anna Salai Junction', 'HIGH', 'North', 60, 13.0626, 80.2644),
+        ('T. Nagar Panagal Park', 'MEDIUM', 'East', 45, 13.0404, 80.2337),
+        ('Adyar Signal', 'LOW', 'South', 30, 13.0067, 80.2570),
+        ('Kathipara Junction', 'HIGH', 'West', 90, 13.0096, 80.2034),
+        ('Madhya Kailash', 'MEDIUM', 'North', 40, 13.0064, 80.2433),
+        ('Tidel Park Signal', 'LOW', 'East', 20, 12.9901, 80.2484);
+      `;
+      await pool.query(seedChennai);
+      console.log('✅ Seeded Chennai traffic signals data');
+    }
+
+    // Seed Additional Tamil Nadu Traffic Signals
+    const tnSignalsCheck = await pool.query("SELECT COUNT(*) FROM traffic_signals WHERE location = 'Tambaram Junction'");
+    if (parseInt(tnSignalsCheck.rows[0].count) === 0) {
+      const seedTNSignals = `
+        INSERT INTO traffic_signals (location, congestion_level, current_green, countdown, latitude, longitude) VALUES
+        ('Tambaram Junction', 'HIGH', 'South', 55, 12.9249, 80.1000),
+        ('Chromepet Signal', 'MEDIUM', 'North', 35, 12.9516, 80.1462),
+        ('Guindy Roundtana', 'HIGH', 'East', 70, 13.0067, 80.2206),
+        ('Velachery Vijaya Nagar', 'HIGH', 'West', 65, 12.9759, 80.2212),
+        ('Porur Junction', 'MEDIUM', 'South', 40, 13.0382, 80.1565),
+        ('Vadapalani Signal', 'HIGH', 'North', 60, 13.0500, 80.2121),
+        ('Koyambedu Junction', 'HIGH', 'East', 80, 13.0732, 80.1934),
+        ('Thirumangalam Signal', 'MEDIUM', 'West', 45, 13.0850, 80.1990),
+        ('Anna Nagar Roundtana', 'LOW', 'South', 30, 13.0878, 80.2150),
+        ('Poonamallee Junction', 'MEDIUM', 'North', 50, 13.0473, 80.0945),
+        ('Madurai Goripalayam', 'HIGH', 'East', 60, 9.9252, 78.1198),
+        ('Trichy Central Bus Stand', 'MEDIUM', 'West', 40, 10.8050, 78.6856),
+        ('Coimbatore Gandhipuram', 'HIGH', 'South', 55, 11.0168, 76.9558),
+        ('Salem Central Bus Stand', 'MEDIUM', 'North', 35, 11.6643, 78.1460),
+        ('Tirunelveli New Bus Stand', 'LOW', 'East', 25, 8.7139, 77.7567),
+        ('Vellore New Bus Stand', 'MEDIUM', 'West', 40, 12.9165, 79.1325),
+        ('Erode New Bus Stand', 'MEDIUM', 'South', 30, 11.3410, 77.7172),
+        ('Thanjavur Old Bus Stand', 'LOW', 'North', 20, 10.7870, 79.1378);
+      `;
+      await pool.query(seedTNSignals);
+      console.log('✅ Seeded Additional Tamil Nadu traffic signals data');
+    }
+
     await pool.query(violationsTable);
     await pool.query(alertsTable);
 

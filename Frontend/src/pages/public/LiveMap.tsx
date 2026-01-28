@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Search, Navigation, Clock, MapPin, Route, Loader2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap, useMapEvents } from 'react-leaflet';
+import { divIcon } from 'leaflet';
 
 interface MapMarker {
   id: number;
@@ -11,17 +13,28 @@ interface MapMarker {
   traffic: string;
 }
 
+interface RouteInfo {
+  id: number;
+  name: string;
+  time: string;
+  distance: string;
+  traffic: string;
+  path: [number, number][];
+}
+
 export const LiveMap: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRoute, setSelectedRoute] = useState<number | null>(null);
   const [markers, setMarkers] = useState<MapMarker[]>([]);
   const [loading, setLoading] = useState(true);
-
-  const suggestedRoutes = [
-    { id: 1, name: 'Via Ring Road', time: '25 min', distance: '12.5 km', traffic: 'light' },
-    { id: 2, name: 'Via Old Airport Road', time: '35 min', distance: '10.2 km', traffic: 'moderate' },
-    { id: 3, name: 'Via Koramangala', time: '45 min', distance: '9.8 km', traffic: 'heavy' },
-  ];
+  const [isSearching, setIsSearching] = useState(false);
+  const [showRoutes, setShowRoutes] = useState(false);
+  const [suggestedRoutes, setSuggestedRoutes] = useState<RouteInfo[]>([]);
+  const [source, setSource] = useState('Anna Salai Junction');
+  const [destination, setDestination] = useState('Tidel Park Signal');
+  const [activeInput, setActiveInput] = useState<'source' | 'destination'>('source');
+  const [sourceSuggestions, setSourceSuggestions] = useState<MapMarker[]>([]);
+  const [destinationSuggestions, setDestinationSuggestions] = useState<MapMarker[]>([]);
 
   useEffect(() => {
     const fetchMarkers = async () => {
@@ -29,14 +42,16 @@ export const LiveMap: React.FC = () => {
         const response = await fetch('http://localhost:3000/api/signals');
         if (response.ok) {
           const data = await response.json();
-          // Map backend data to frontend marker format
-          const mappedMarkers = data.map((signal: any) => ({
-            id: signal.id,
-            lat: signal.lat || 12.9716, // Fallback if null
-            lng: signal.lng || 77.5946,
-            name: signal.name,
-            traffic: signal.congestionLevel
-          }));
+          // Map backend data to frontend marker format, filtering out signals without coordinates
+          const mappedMarkers = data
+            .filter((signal: any) => signal.lat && signal.lng)
+            .map((signal: any) => ({
+              id: signal.id,
+              lat: signal.lat,
+              lng: signal.lng,
+              name: signal.name,
+              traffic: signal.congestionLevel
+            }));
           setMarkers(mappedMarkers);
         }
       } catch (error) {
@@ -64,6 +79,96 @@ export const LiveMap: React.FC = () => {
     }
   };
 
+  const getTrafficHexColor = (traffic: string) => {
+    switch (traffic) {
+      case 'low':
+      case 'light':
+        return '#22c55e';
+      case 'medium':
+      case 'moderate':
+        return '#eab308';
+      default:
+        return '#ef4444';
+    }
+  };
+
+  const handleSearch = async () => {
+    if (!source.trim() || !destination.trim()) return;
+    setIsSearching(true);
+    setShowRoutes(false);
+    setSelectedRoute(null);
+    setSuggestedRoutes([]);
+    
+    const getCoords = (query: string) => {
+      const marker = markers.find(m => m.name.toLowerCase() === query.toLowerCase());
+      if (marker) return { lat: marker.lat, lng: marker.lng };
+      
+      const parts = query.split(',').map(p => parseFloat(p.trim()));
+      if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+        return { lat: parts[0], lng: parts[1] };
+      }
+      return null;
+    };
+
+    const sourceCoords = getCoords(source);
+    const destCoords = getCoords(destination);
+
+    if (!sourceCoords || !destCoords) {
+      console.error("Could not find source or destination coordinates");
+      setIsSearching(false);
+      return;
+    }
+
+    // OSRM API expects {longitude},{latitude}
+    const url = `http://router.project-osrm.org/route/v1/driving/${sourceCoords.lng},${sourceCoords.lat};${destCoords.lng},${destCoords.lat}?alternatives=true&overview=full&geometries=geojson`;
+
+    try {
+      const response = await fetch(url);
+      const data = await response.json();
+
+      if (data.code === 'Ok' && data.routes) {
+        const routes: RouteInfo[] = data.routes.map((route: any, index: number) => {
+          // OSRM returns coordinates as [longitude, latitude], Leaflet needs [latitude, longitude]
+          const path = route.geometry.coordinates.map((coord: [number, number]) => [coord[1], coord[0]] as [number, number]);
+          const traffic = route.duration > 2000 ? 'heavy' : route.duration > 1000 ? 'moderate' : 'light';
+          
+          return {
+            id: index + 1,
+            name: `Route ${index + 1}`,
+            time: `${Math.round(route.duration / 60)} min`,
+            distance: `${(route.distance / 1000).toFixed(1)} km`,
+            traffic: traffic,
+            path: path,
+          };
+        });
+        setSuggestedRoutes(routes);
+        setShowRoutes(true);
+      } else {
+        console.error("Error fetching routes from OSRM:", data.message);
+      }
+    } catch (error) {
+      console.error("Failed to fetch routes:", error);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  // Custom icon function to create dynamic pulsing markers
+  const createTrafficIcon = (traffic: string) => {
+    const colorClass = getTrafficColor(traffic);
+    const html = `
+      <div class="relative flex items-center justify-center w-6 h-6">
+        <div class="w-3 h-3 rounded-full ${colorClass} animate-pulse"></div>
+        <div class="absolute w-3 h-3 rounded-full ${colorClass} animate-ping opacity-75"></div>
+      </div>`;
+
+    return divIcon({
+      className: 'bg-transparent border-0',
+      html: html,
+      iconSize: [24, 24],
+    });
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[600px]">
@@ -71,6 +176,63 @@ export const LiveMap: React.FC = () => {
       </div>
     );
   }
+
+  // Component to auto-fit the map to the selected route
+  const FitBoundsToRoute = () => {
+    const map = useMap();
+    useEffect(() => {
+      const selected = suggestedRoutes.find(r => r.id === selectedRoute);
+      if (selected && selected.path.length > 0) {
+        map.fitBounds(selected.path);
+      }
+    }, [selectedRoute]);
+    return null;
+  };
+
+  const handleInputChange = (value: string, type: 'source' | 'destination') => {
+    if (type === 'source') {
+      setSource(value);
+      if (value.trim()) {
+        setSourceSuggestions(markers.filter(m => m.name.toLowerCase().includes(value.toLowerCase())));
+      } else {
+        setSourceSuggestions([]);
+      }
+    } else {
+      setDestination(value);
+      if (value.trim()) {
+        setDestinationSuggestions(markers.filter(m => m.name.toLowerCase().includes(value.toLowerCase())));
+      } else {
+        setDestinationSuggestions([]);
+      }
+    }
+  };
+
+  const selectSuggestion = (marker: MapMarker, type: 'source' | 'destination') => {
+    if (type === 'source') {
+      setSource(marker.name);
+      setSourceSuggestions([]);
+    } else {
+      setDestination(marker.name);
+      setDestinationSuggestions([]);
+    }
+  };
+
+  const MapClickHandler = () => {
+    useMapEvents({
+      click(e) {
+        const { lat, lng } = e.latlng;
+        const coordString = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+        
+        if (activeInput === 'source') {
+          setSource(coordString);
+          setActiveInput('destination');
+        } else {
+          setDestination(coordString);
+        }
+      },
+    });
+    return null;
+  };
 
   return (
     <div className="space-y-6">
@@ -87,16 +249,48 @@ export const LiveMap: React.FC = () => {
           <div className="glow-card p-4 space-y-3">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                placeholder="Search location..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
-              />
+              <Input 
+                placeholder="Source" 
+                value={source}
+                onChange={(e) => handleInputChange(e.target.value, 'source')}
+                onFocus={() => setActiveInput('source')}
+                className={`pl-10 ${activeInput === 'source' ? 'ring-2 ring-primary' : ''}`} />
+              {sourceSuggestions.length > 0 && activeInput === 'source' && (
+                <div className="absolute z-10 w-full mt-1 bg-card border border-border rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                  {sourceSuggestions.map(marker => (
+                    <div key={marker.id} onClick={() => selectSuggestion(marker, 'source')} className="p-2 hover:bg-muted cursor-pointer text-sm">
+                      {marker.name}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-            <Button className="w-full gap-2 gradient-bg">
-              <Navigation className="w-4 h-4" />
-              Find Route
+            <div className="relative">
+              <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input 
+                placeholder="Destination" 
+                value={destination}
+                onChange={(e) => handleInputChange(e.target.value, 'destination')}
+                onFocus={() => setActiveInput('destination')}
+                onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                className={`pl-10 ${activeInput === 'destination' ? 'ring-2 ring-primary' : ''}`} />
+              {destinationSuggestions.length > 0 && activeInput === 'destination' && (
+                <div className="absolute z-10 w-full mt-1 bg-card border border-border rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                  {destinationSuggestions.map(marker => (
+                    <div key={marker.id} onClick={() => selectSuggestion(marker, 'destination')} className="p-2 hover:bg-muted cursor-pointer text-sm">
+                      {marker.name}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <Button 
+              className="w-full gap-2 gradient-bg" 
+              onClick={handleSearch}
+              disabled={isSearching || !source.trim() || !destination.trim()}
+            >
+              {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Navigation className="w-4 h-4" />}
+              {isSearching ? 'Finding Routes...' : 'Find Route'}
             </Button>
           </div>
 
@@ -120,7 +314,8 @@ export const LiveMap: React.FC = () => {
           </div>
 
           {/* Suggested Routes */}
-          <div className="glow-card p-4">
+          {showRoutes && (
+          <div className="glow-card p-4 animate-fade-in">
             <h3 className="font-semibold mb-3 flex items-center gap-2">
               <Route className="w-4 h-4" />
               Suggested Routes
@@ -151,90 +346,37 @@ export const LiveMap: React.FC = () => {
               ))}
             </div>
           </div>
+          )}
         </div>
 
         {/* Map Container */}
-        <div className="lg:col-span-3 glow-card overflow-hidden min-h-[500px] lg:min-h-[600px]">
-          {/* Map Placeholder with simulated visualization */}
-          <div className="relative w-full h-full min-h-[500px] lg:min-h-[600px] bg-muted/30">
-            {/* Simulated Map Background */}
-            <div className="absolute inset-0 bg-gradient-to-br from-muted/50 to-muted/20">
-              {/* Grid Pattern */}
-              <svg className="absolute inset-0 w-full h-full opacity-20" xmlns="http://www.w3.org/2000/svg">
-                <defs>
-                  <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-                    <path d="M 40 0 L 0 0 0 40" fill="none" stroke="currentColor" strokeWidth="1" />
-                  </pattern>
-                </defs>
-                <rect width="100%" height="100%" fill="url(#grid)" />
-              </svg>
-
-              {/* Roads Simulation */}
-              <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-                {/* Horizontal Roads */}
-                <line x1="0" y1="30" x2="100" y2="30" stroke="hsl(var(--muted-foreground))" strokeWidth="0.5" opacity="0.3" />
-                <line x1="0" y1="50" x2="100" y2="50" stroke="hsl(var(--muted-foreground))" strokeWidth="0.8" opacity="0.4" />
-                <line x1="0" y1="70" x2="100" y2="70" stroke="hsl(var(--muted-foreground))" strokeWidth="0.5" opacity="0.3" />
-                
-                {/* Vertical Roads */}
-                <line x1="25" y1="0" x2="25" y2="100" stroke="hsl(var(--muted-foreground))" strokeWidth="0.5" opacity="0.3" />
-                <line x1="50" y1="0" x2="50" y2="100" stroke="hsl(var(--muted-foreground))" strokeWidth="0.8" opacity="0.4" />
-                <line x1="75" y1="0" x2="75" y2="100" stroke="hsl(var(--muted-foreground))" strokeWidth="0.5" opacity="0.3" />
-                
-                {/* Traffic Heatmap Areas */}
-                <ellipse cx="35" cy="45" rx="15" ry="10" fill="hsl(var(--traffic-green))" opacity="0.2" />
-                <ellipse cx="65" cy="55" rx="12" ry="8" fill="hsl(var(--traffic-yellow))" opacity="0.25" />
-                <ellipse cx="50" cy="30" rx="10" ry="6" fill="hsl(var(--traffic-red))" opacity="0.3" />
-              </svg>
-            </div>
-
-            {/* Traffic Signal Markers */}
-            {markers.map((marker, index) => (
-              <div
-                key={marker.id}
-                className="absolute transform -translate-x-1/2 -translate-y-1/2 animate-fade-in"
-                style={{
-                  left: `${15 + (index * 12)}%`,
-                  top: `${25 + (index % 3) * 25}%`,
-                  animationDelay: `${index * 100}ms`,
-                }}
-              >
-                <div className="relative group cursor-pointer">
-                  <div className={`w-4 h-4 rounded-full ${getTrafficColor(marker.traffic)} animate-pulse`} />
-                  <div className={`absolute inset-0 w-4 h-4 rounded-full ${getTrafficColor(marker.traffic)} animate-ping opacity-50`} />
-                  
-                  {/* Tooltip */}
-                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                    <div className="bg-popover border border-border rounded-lg p-2 shadow-lg whitespace-nowrap">
-                      <p className="font-medium text-sm">{marker.name}</p>
-                      <p className="text-xs text-muted-foreground capitalize">{marker.traffic} traffic</p>
-                    </div>
+        <div className="lg:col-span-3 glow-card overflow-hidden min-h-[500px] lg:min-h-[600px] z-0">
+          <MapContainer center={[13.03, 80.24]} zoom={12} scrollWheelZoom={true} className="w-full h-full">
+            <MapClickHandler />
+            <TileLayer
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            />
+            <FitBoundsToRoute />
+            {selectedRoute && (
+              <Polyline 
+                positions={suggestedRoutes.find(r => r.id === selectedRoute)?.path || []}
+                color={getTrafficHexColor(suggestedRoutes.find(r => r.id === selectedRoute)?.traffic || 'low')}
+                weight={5}
+                opacity={0.7}
+              />
+            )}
+            {markers.map(marker => (
+              <Marker key={marker.id} position={[marker.lat, marker.lng]} icon={createTrafficIcon(marker.traffic)}>
+                <Popup>
+                  <div className="font-sans">
+                    <p className="font-semibold">{marker.name}</p>
+                    <p className="text-sm text-muted-foreground capitalize">{marker.traffic} traffic</p>
                   </div>
-                </div>
-              </div>
+                </Popup>
+              </Marker>
             ))}
-
-            {/* Map Controls */}
-            <div className="absolute top-4 right-4 flex flex-col gap-2">
-              <Button size="icon" variant="secondary" className="shadow-lg">
-                <span className="text-lg font-bold">+</span>
-              </Button>
-              <Button size="icon" variant="secondary" className="shadow-lg">
-                <span className="text-lg font-bold">−</span>
-              </Button>
-            </div>
-
-            {/* Current Location Indicator */}
-            <div className="absolute bottom-4 left-4 glow-card p-3 flex items-center gap-2 bg-background/80 backdrop-blur-sm">
-              <MapPin className="w-4 h-4 text-primary" />
-              <span className="text-sm font-medium">MG Road, Bangalore</span>
-            </div>
-
-            {/* Map Attribution */}
-            <div className="absolute bottom-4 right-4 text-xs text-muted-foreground bg-background/60 px-2 py-1 rounded">
-              OpenStreetMap Integration Ready
-            </div>
-          </div>
+          </MapContainer>
         </div>
       </div>
     </div>
