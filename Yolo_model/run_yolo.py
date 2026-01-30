@@ -1,12 +1,13 @@
 from ultralytics import YOLO
 
-# Load your trained model
 model = YOLO("best.pt")
 
-# Run prediction on video
-model.predict(
+model.track(
     source="traffic.mp4",
+    tracker="bytetrack.yaml",
     conf=0.4,
-    save=True,
-    show=True   # This will open video window with boxes
+    persist=True,
+    show=True,
+    save=True
 )
+
