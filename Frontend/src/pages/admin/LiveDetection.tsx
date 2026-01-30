@@ -19,7 +19,6 @@ import {
   FileVideo,
   Settings,
 } from 'lucide-react';
-import { AnimatedCounter } from '@/components/ui/AnimatedCounter';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -39,10 +38,10 @@ interface VehicleCounts {
   bike: number;
   bus: number;
   truck: number;
-  ambulance: number;
+  auto: number;
 }
 
-const initialCounts: VehicleCounts = { car: 0, bike: 0, bus: 0, truck: 0, ambulance: 0 };
+const initialCounts: VehicleCounts = { car: 0, bike: 0, bus: 0, truck: 0, auto: 0 };
 
 export const LiveDetection: React.FC = () => {
   // Video State
@@ -177,7 +176,8 @@ export const LiveDetection: React.FC = () => {
       case 'motorcycle': return '#22c55e'; // success
       case 'bus': return '#eab308'; // warning
       case 'truck': return '#64748b'; // muted
-      case 'ambulance': return '#ef4444'; // destructive
+      case 'auto':
+      case 'rickshaw': return '#ef4444'; // destructive
       default: return '#3b82f6';
     }
   };
@@ -295,7 +295,11 @@ export const LiveDetection: React.FC = () => {
 
           data.detections.forEach((det: Detection) => {
             const label = det.label.toLowerCase();
-            const key = (label === 'motorcycle' ? 'bike' : label) as keyof VehicleCounts;
+            let key: keyof VehicleCounts | undefined;
+
+            if (label === 'motorcycle' || label === 'bike') key = 'bike';
+            else if (label === 'auto' || label === 'rickshaw') key = 'auto';
+            else if (['car', 'bus', 'truck'].includes(label)) key = label as keyof VehicleCounts;
             
             // Map Backend ID to Frontend ID (1...N)
             let displayId = det.id;
@@ -309,12 +313,12 @@ export const LiveDetection: React.FC = () => {
             }
 
             // Update Live Count (Current Frame)
-            if (current[key] !== undefined) current[key]++;
+            if (key && current[key] !== undefined) current[key]++;
 
             // Update Total Count (Unique IDs)
             if (displayId !== undefined && !seenIds.current.has(displayId)) {
               seenIds.current.add(displayId);
-              if (newTotal[key] !== undefined) newTotal[key]++;
+              if (key && newTotal[key] !== undefined) newTotal[key]++;
               newUniqueDetected = true;
             }
           });
@@ -358,10 +362,10 @@ export const LiveDetection: React.FC = () => {
     { type: 'Bike', key: 'bike', icon: Bike, color: 'text-success' },
     { type: 'Bus', key: 'bus', icon: Bus, color: 'text-warning' },
     { type: 'Truck', key: 'truck', icon: Truck, color: 'text-muted-foreground' },
-    { type: 'Ambulance', key: 'ambulance', icon: Ambulance, color: 'text-destructive' },
+    { type: 'Auto', key: 'auto', icon: Ambulance, color: 'text-destructive' },
   ];
 
-  const totalDetected = Object.values(totalCounts).reduce((a, b) => a + b, 0);
+  const totalDetected = vehicleTypes.reduce((acc, type) => acc + totalCounts[type.key as keyof VehicleCounts], 0);
   const currentDetected = Object.values(currentCounts).reduce((a, b) => a + b, 0);
 
   return (
@@ -517,10 +521,9 @@ export const LiveDetection: React.FC = () => {
                   <p className="text-xs text-muted-foreground">Cumulative unique count</p>
                 </div>
               </div>
-              <AnimatedCounter
-                end={totalDetected}
-                className="text-4xl font-display font-bold gradient-text"
-              />
+              <span className="text-4xl font-display font-bold gradient-text">
+                {totalDetected}
+              </span>
             </div>
             
             <div className="grid grid-cols-2 gap-2 mt-4">
