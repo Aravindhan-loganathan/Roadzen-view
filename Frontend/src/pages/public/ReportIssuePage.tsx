@@ -3,7 +3,9 @@ import { ReportForm } from '@/components/reports/ReportForm';
 import { fetchMyReports, deleteReport } from '@/services/reportApi';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
-import { Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Trash2, ChevronLeft, ChevronRight, Search, ArrowUpDown } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -29,14 +31,15 @@ export const ReportIssuePage = () => {
   const [reports, setReports] = useState<Report[]>([]);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [search, setSearch] = useState('');
+  const [sortBy, setSortBy] = useState('created_at');
+  const [order, setOrder] = useState('DESC');
   const { toast } = useToast();
 
 
   const loadReports = async () => {
     try {
-      const data = await fetchMyReports(page);
-      console.log('[ReportIssuePage] API Response:', data);
-      
+      const data = await fetchMyReports(page, 5, search, sortBy, order);
       if (Array.isArray(data)) {
         setReports(data);
         setTotalPages(1);
@@ -44,7 +47,6 @@ export const ReportIssuePage = () => {
         setReports(data.reports);
         setTotalPages(data.pagination?.totalPages || 1);
       } else {
-        console.warn('Unexpected API response structure:', data);
         setReports([]);
         setTotalPages(1);
       }
@@ -75,7 +77,7 @@ export const ReportIssuePage = () => {
 
   useEffect(() => {
     loadReports();
-  }, [page]);
+  }, [page, search, sortBy, order]);
 
   return (
     <div className="max-w-3xl mx-auto space-y-8">
@@ -84,7 +86,48 @@ export const ReportIssuePage = () => {
 
       {/* My Reports */}
       <div className="space-y-4">
-        <h2 className="text-xl font-semibold">My Reported Issues</h2>
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <h2 className="text-xl font-semibold">My Reported Issues</h2>
+          
+          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+            <div className="relative w-full sm:w-48">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-9 h-9"
+              />
+            </div>
+            
+            <div className="flex gap-2">
+              <Select value={sortBy} onValueChange={setSortBy}>
+                <SelectTrigger className="h-9 w-[130px]">
+                  <div className="flex items-center gap-2">
+                    <ArrowUpDown className="h-4 w-4" />
+                    <SelectValue placeholder="Sort" />
+                  </div>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="created_at">Date</SelectItem>
+                  <SelectItem value="severity">Severity</SelectItem>
+                  <SelectItem value="status">Status</SelectItem>
+                  <SelectItem value="type">Type</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Button 
+                variant="outline" 
+                size="icon"
+                className="h-9 w-9"
+                onClick={() => setOrder(order === 'ASC' ? 'DESC' : 'ASC')}
+                title={order === 'ASC' ? 'Ascending' : 'Descending'}
+              >
+                <ArrowUpDown className={`h-4 w-4 transition-transform ${order === 'ASC' ? 'rotate-180' : ''}`} />
+              </Button>
+            </div>
+          </div>
+        </div>
 
         {reports.length === 0 && (
           <p className="text-muted-foreground">

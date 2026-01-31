@@ -1,16 +1,32 @@
 import React, { useEffect, useState } from 'react';
-import { markReportAsHandled } from '@/services/reportApi';
+import { fetchAdminReports, markReportAsHandled, markReportAsCompleted, deleteReport } from '@/services/reportApi';
 import { useToast } from '@/hooks/use-toast';
 import {
   FileText,
   Download,
   Calendar,
-  TrendingUp,
-  Clock,
   AlertTriangle,
   MapPin,
+  Search,
+  ChevronLeft,
+  ChevronRight,
+  ArrowUpDown,
+  Trash2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 interface UserReport {
   id: number;
@@ -27,6 +43,11 @@ export const Reports: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [handlingReportId, setHandlingReportId] = useState<number | null>(null); 
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [search, setSearch] = useState('');
+  const [sortBy, setSortBy] = useState('created_at');
+  const [order, setOrder] = useState('DESC');
   const { toast } = useToast();
 
   const reportTypes = [
@@ -43,63 +64,34 @@ export const Reports: React.FC = () => {
     { name: 'Signal_Performance_Q1.pdf', date: '2024-01-22', size: '3.1 MB' },
   ];
 
-  useEffect(() => {
-    const fetchReports = async () => {
-      try {
-        setLoading(true);
-        const token = localStorage.getItem('traffic_token');
-
-        if (!token) {
-          setError('Not authenticated');
-          return;
-        }
-
-        const response = await fetch('http://localhost:3000/api/admin/reports', {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        });
-
-        if (!response.ok) {
-          if (response.status === 401) {
-            setError('Unauthorized - Please login again');
-            localStorage.removeItem('traffic_token');
-            return;
-          }
-          throw new Error(`HTTP ${response.status}`);
-        }
-
-        const data = await response.json();
-        
-        // Handle both array (legacy) and object with reports property (new)
-        if (Array.isArray(data)) {
-          setUserReports(data);
-        } else if (data && Array.isArray(data.reports)) {
-          setUserReports(data.reports);
-        } else {
-          console.warn('API response is not an array or object with reports:', data);
-          setUserReports([]);
-        }
-      } catch (err) {
-        console.error('Failed to load user reports', err);
-        setError(err instanceof Error ? err.message : 'Failed to load reports');
+  const fetchReports = async (isBackground = false) => {
+    try {
+      if (!isBackground) setLoading(true);
+      const data = await fetchAdminReports(page, 5, search, sortBy, order);
+      
+      if (Array.isArray(data)) {
+        setUserReports(data);
+        setTotalPages(1);
+      } else if (data && Array.isArray(data.reports)) {
+        setUserReports(data.reports);
+        setTotalPages(data.pagination?.totalPages || 1);
+      } else {
         setUserReports([]);
-      } finally {
-        setLoading(false);
+        setTotalPages(1);
       }
-    };
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load reports');
+      // Keep existing reports on error if possible, or clear them? 
+      // Better to not clear if just a refresh failed. But here we might be searching.
+      if (!userReports.length) setUserReports([]);
+    } finally {
+      if (!isBackground) setLoading(false);
+    }
+  };
 
+  useEffect(() => {
     fetchReports();
-  }, []);
-
-  const severityOrder = ['critical', 'high', 'medium', 'low'];
-
-  const sortedReports = [...userReports].sort(
-    (a, b) =>
-      severityOrder.indexOf(a.severity) - severityOrder.indexOf(b.severity)
-  );
+  }, [page, search, sortBy, order]);
 
   const severityStyle = (severity: string) => {
     switch (severity) {
@@ -107,6 +99,24 @@ export const Reports: React.FC = () => {
       case 'high': return 'text-orange-600 bg-orange-500/10';
       case 'medium': return 'text-yellow-600 bg-yellow-500/10';
       default: return 'text-green-600 bg-green-500/10';
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    try {
+      await deleteReport(id);
+      toast({
+        title: 'Success',
+        description: 'Report deleted successfully',
+      });
+      fetchReports(true); // Background refresh
+    } catch (error) {
+      console.error("Failed to delete report", error);
+      toast({
+        title: 'Error',
+        description: 'Failed to delete report',
+        variant: 'destructive',
+      });
     }
   };
 
@@ -123,21 +133,13 @@ export const Reports: React.FC = () => {
     setHandlingReportId(reportId);
     try {
       await markReportAsHandled(reportId);
-      
-      // Update local state
-      setUserReports(prev =>
-        prev.map(r =>
-          r.id === reportId ? { ...r, status: 'in_progress' } : r
-        )
-      );
-
+      fetchReports(true);
       toast({
         title: 'Success',
         description: 'Report marked as handling',
         variant: 'default',
       });
       } catch (err) {
-      console.error('Failed to update report:', err);
       toast({
         title: 'Error',
         description: err instanceof Error ? err.message : 'Failed to update report',
@@ -148,8 +150,26 @@ export const Reports: React.FC = () => {
     }
   };
 
-
-
+  const handleMarkAsCompleted = async (reportId: number) => {
+    setHandlingReportId(reportId);
+    try {
+      await markReportAsCompleted(reportId);
+      fetchReports(true);
+      toast({
+        title: 'Success',
+        description: 'Report marked as completed',
+        variant: 'default',
+      });
+      } catch (err) {
+      toast({
+        title: 'Error',
+        description: err instanceof Error ? err.message : 'Failed to update report',
+        variant: 'destructive',
+      });
+    } finally {
+      setHandlingReportId(null);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -168,14 +188,15 @@ export const Reports: React.FC = () => {
         </div>
       )}
 
-      {/* Loading State */}
-      {loading && (
+      {/* Loading State - Only show on initial load when we have no data */}
+      {loading && userReports.length === 0 && (
         <div className="glow-card p-6 text-center">
           <p className="text-muted-foreground">Loading reports...</p>
         </div>
       )}
-
-      {!loading && (
+      
+      {/* Main Content - Show if we have data or if loading is finished (allowing for empty state) */}
+      {(userReports.length > 0 || !loading) && (
         <>
           {/* Quick Stats */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -233,27 +254,90 @@ export const Reports: React.FC = () => {
             </div>
           </div>
 
-          {/* USER REPORTED ISSUES */}
-          <div className="glow-card p-6">
-            <h3 className="font-semibold mb-4 flex items-center gap-2">
-              <AlertTriangle className="w-5 h-5 text-warning" />
-              User Reported Issues ({userReports.length})
-            </h3>
+          {/* USER REPORTED ISSUES with Search and Sort */}
+          <div className={`glow-card p-6 ${loading ? 'opacity-70' : ''} transition-opacity duration-200`}>
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
+              <h3 className="font-semibold flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-warning" />
+                User Reported Issues
+              </h3>
+              
+              <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
+                <div className="relative w-full sm:w-64">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search reports..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="pl-9"
+                  />
+                </div>
+                
+                <Select value={sortBy} onValueChange={setSortBy}>
+                  <SelectTrigger className="w-full sm:w-[150px]">
+                    <div className="flex items-center gap-2">
+                      <ArrowUpDown className="h-4 w-4" />
+                      <SelectValue placeholder="Sort by" />
+                    </div>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="created_at">Date</SelectItem>
+                    <SelectItem value="severity">Severity</SelectItem>
+                    <SelectItem value="status">Status</SelectItem>
+                    <SelectItem value="type">Type</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Button 
+                  variant="outline" 
+                  size="icon"
+                  onClick={() => setOrder(order === 'ASC' ? 'DESC' : 'ASC')}
+                  title={order === 'ASC' ? 'Ascending' : 'Descending'}
+                >
+                  <ArrowUpDown className={`h-4 w-4 transition-transform ${order === 'ASC' ? 'rotate-180' : ''}`} />
+                </Button>
+              </div>
+            </div>
 
             {userReports.length === 0 ? (
-              <p className="text-muted-foreground text-center py-8">No reports yet</p>
+              <p className="text-muted-foreground text-center py-8">No reports found</p>
             ) : (
               <div className="space-y-3">
-                {sortedReports.map(report => (
+                {userReports.map(report => (
                   <div
                     key={report.id}
                     className="p-4 rounded-lg border bg-muted/20"
                   >
                     <div className="flex justify-between mb-2">
                       <p className="font-medium">{report.type}</p>
-                      <span className={`text-xs px-2 py-1 rounded ${severityStyle(report.severity)}`}>
-                        {report.severity.toUpperCase()}
-                      </span>
+                      
+                      <div className="flex items-center gap-2">
+                        <span className={`text-xs px-2 py-1 rounded ${severityStyle(report.severity)}`}>
+                            {report.severity.toUpperCase()}
+                        </span>
+                        
+                         <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:bg-destructive/10">
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Delete Report</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Are you sure you want to delete this report? This action cannot be undone.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => handleDelete(report.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                                  Delete
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                         </AlertDialog>
+                      </div>
                     </div>
 
                     <p className="text-sm text-muted-foreground mb-2">
@@ -268,28 +352,71 @@ export const Reports: React.FC = () => {
                     <span className={`px-2 py-1 rounded text-xs font-medium ${
                       report.status === 'pending' ? 'bg-yellow-500/20 text-yellow-700' : 
                       report.status === 'in_progress' ? 'bg-blue-500/20 text-blue-700' :
-                      'bg-green-500/20 text-green-700'
+                      report.status === 'completed' ? 'bg-green-500/20 text-green-700' :
+                      'bg-gray-500/20 text-gray-700'
                     }`}>
                       {report.status.toUpperCase().replace('_', ' ')}
                     </span>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleMarkAsHandling(report.id, report.status)}
-                      disabled={report.status !== 'pending' || handlingReportId === report.id}
-                      className="gap-2"
-                    >
-                      {handlingReportId === report.id ? 'Updating...' : 'Mark as Handling'}
-                    </Button>
+                    
+                    {report.status === 'pending' && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleMarkAsHandling(report.id, report.status)}
+                        disabled={handlingReportId === report.id}
+                        className="gap-2"
+                      >
+                        {handlingReportId === report.id ? 'Updating...' : 'Mark as Handling'}
+                      </Button>
+                    )}
+
+                    {report.status === 'in_progress' && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-2 border-green-200 hover:bg-green-50 text-green-700"
+                        onClick={() => handleMarkAsCompleted(report.id)}
+                        disabled={handlingReportId === report.id}
+                      >
+                        {handlingReportId === report.id ? 'Updating...' : 'Mark as Completed'}
+                      </Button>
+                    )}
                   </div>
                     </div>
                   </div>
                 ))}
               </div>
             )}
+            
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-center gap-2 mt-6">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <div className="text-sm text-muted-foreground">
+                  Page {page} of {totalPages}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                  disabled={page === totalPages}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+            
           </div>
         </>
       )}
     </div>
   );
 };
+

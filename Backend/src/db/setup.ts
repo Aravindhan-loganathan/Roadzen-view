@@ -54,7 +54,7 @@ const createTables = async () => {
       severity VARCHAR(20) NOT NULL CHECK (severity IN ('low', 'medium', 'high', 'critical')),
       description TEXT NOT NULL,
       location VARCHAR(255) NOT NULL,
-      status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'resolved', 'in_progress')),
+      status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'resolved', 'in_progress', 'completed')),
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
@@ -136,6 +136,18 @@ const createTables = async () => {
     // Create indexes for better performance
     await pool.query('CREATE INDEX IF NOT EXISTS idx_reports_user_id ON reports(user_id)');
     await pool.query('CREATE INDEX IF NOT EXISTS idx_reports_created_at ON reports(created_at DESC)');
+
+    // Update status check constraint to include 'completed'
+    try {
+      await pool.query(`
+        ALTER TABLE reports DROP CONSTRAINT IF EXISTS reports_status_check;
+        ALTER TABLE reports ADD CONSTRAINT reports_status_check 
+        CHECK (status IN ('pending', 'resolved', 'in_progress', 'completed'));
+      `);
+      console.log('✅ Updated reports status constraint');
+    } catch (err) {
+      console.error('⚠️ Could not update reports status constraint (might already exist or differ)', err);
+    }
 
     // Update Alerts Table Schema
     await pool.query(`ALTER TABLE emergency_alerts ADD COLUMN IF NOT EXISTS title VARCHAR(255)`);

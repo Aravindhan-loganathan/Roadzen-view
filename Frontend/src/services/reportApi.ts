@@ -10,8 +10,30 @@ const getHeaders = () => {
   };
 };
 
-export const fetchMyReports = async (page = 1, limit = 10) => {
-  const response = await fetch(`${API_URL}/reports/my?page=${page}&limit=${limit}`, {
+export const fetchMyReports = async (page = 1, limit = 5, search = '', sortBy = 'created_at', order = 'DESC') => {
+  const query = new URLSearchParams({
+    page: page.toString(),
+    limit: limit.toString(),
+    search,
+    sortBy,
+    order
+  });
+  const response = await fetch(`${API_URL}/reports/my?${query.toString()}`, {
+    headers: getHeaders(),
+  });
+  if (!response.ok) throw new Error('Failed to fetch reports');
+  return response.json();
+};
+
+export const fetchAdminReports = async (page = 1, limit = 5, search = '', sortBy = 'created_at', order = 'DESC') => {
+  const query = new URLSearchParams({
+    page: page.toString(),
+    limit: limit.toString(),
+    search,
+    sortBy,
+    order
+  });
+  const response = await fetch(`${API_URL}/admin/reports?${query.toString()}`, {
     headers: getHeaders(),
   });
   if (!response.ok) throw new Error('Failed to fetch reports');
@@ -40,6 +62,10 @@ export const updateReportStatus = async (id: number, status: string) => {
 
 export const markReportAsHandled = async (id: number) => {
   return updateReportStatus(id, 'in_progress');
+};
+
+export const markReportAsCompleted = async (id: number) => {
+  return updateReportStatus(id, 'completed');
 };
 
 export const deleteReport = async (id: number) => {
