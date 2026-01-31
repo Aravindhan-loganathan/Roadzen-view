@@ -116,7 +116,7 @@ export const getAllReports = async (req: any, res: Response): Promise<void> => {
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 10;
     const offset = (page - 1) * limit;
-    const search = req.query.search as string;
+    const search = (req.query.search as string || '').trim();
     const sortBy = (req.query.sortBy as string) || 'created_at';
     const order = (req.query.order as string) || 'DESC';
 
@@ -126,21 +126,23 @@ export const getAllReports = async (req: any, res: Response): Promise<void> => {
     const safeOrder = order.toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
 
     let query = `
-      SELECT r.*, u.name, u.email 
+      SELECT r.*, u.name as username, u.email 
       FROM reports r 
-      JOIN users u ON r.user_id = u.id 
+      LEFT JOIN users u ON r.user_id = u.id 
     `;
     
-    let countQuery = `SELECT COUNT(*) FROM reports r JOIN users u ON r.user_id = u.id`;
+    let countQuery = `SELECT COUNT(*) FROM reports r LEFT JOIN users u ON r.user_id = u.id`;
     const params: any[] = [];
     let paramIndex = 1;
 
-    if (search) {
+    if (search && search.length > 0) {
       const searchClause = ` WHERE (
-        r.description ILIKE $${paramIndex} OR 
-        r.type ILIKE $${paramIndex} OR 
-        r.location ILIKE $${paramIndex} OR
-        u.name ILIKE $${paramIndex}
+        LOWER(r.description) ILIKE LOWER($${paramIndex}) OR 
+        LOWER(r.type) ILIKE LOWER($${paramIndex}) OR 
+        LOWER(r.location) ILIKE LOWER($${paramIndex}) OR
+        LOWER(u.name) ILIKE LOWER($${paramIndex}) OR
+        LOWER(r.status) ILIKE LOWER($${paramIndex}) OR
+        LOWER(r.severity) ILIKE LOWER($${paramIndex})
       )`;
       query += searchClause;
       countQuery += searchClause;
@@ -150,8 +152,7 @@ export const getAllReports = async (req: any, res: Response): Promise<void> => {
 
     // Add ordering
     if (safeSortBy === 'severity') {
-      // Custom ordering for severity if needed, or simple text sort
-       // 'critical' > 'high' > 'medium' > 'low'
+      // Custom ordering for severity
       query += ` ORDER BY 
         CASE r.severity 
           WHEN 'critical' THEN 4 
