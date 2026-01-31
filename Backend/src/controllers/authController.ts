@@ -193,3 +193,27 @@ export const changePassword = async (req: Request, res: Response): Promise<void>
     res.status(500).json({ message: 'Server error changing password' });
   }
 };
+
+
+export const getAllUsers = async (_req: Request, res: Response) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        id,
+        name,
+        email,
+        role,
+        location,
+        phone,
+        vehicle_number,
+        created_at
+      FROM users
+      ORDER BY created_at DESC
+    `);
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Fetch users error:', error);
+    res.status(500).json({ message: 'Failed to fetch users' });
+  }
+};

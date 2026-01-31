@@ -27,6 +27,7 @@ const navItems = [
   { label: 'Traffic Violation', path: '/admin/violations', icon: AlertOctagon },
   { label: 'Reports', path: '/admin/reports', icon: FileText },
   { label: 'Settings', path: '/admin/settings', icon: Settings },
+  { label: 'User Management', path: '/admin/users', icon: UserRound },
 ];
 
 export const AdminSidebar: React.FC = () => {

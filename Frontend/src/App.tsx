@@ -27,6 +27,7 @@ import { Reports } from "@/pages/admin/Reports";
 import { SettingsPage } from "@/pages/admin/SettingsPage";
 import NotFound from "@/pages/NotFound";
 import { ReportIssuePage } from "@/pages/public/ReportIssuePage";
+import { UserManagement } from "@/pages/admin/UserManagement";
 
 const queryClient = new QueryClient();
 
@@ -76,6 +77,7 @@ const App = () => (
                 <Route path="violations" element={<TrafficViolations />} />
                 <Route path="reports" element={<Reports />} />
                 <Route path="settings" element={<SettingsPage />} />
+                <Route path="users" element={<UserManagement />} />
               </Route>
 
               {/* 404 */}
