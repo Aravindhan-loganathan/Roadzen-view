@@ -8,6 +8,7 @@ import signalRoutes from './routes/signalRoutes';
 import alertRoutes from './routes/alertRoutes';
 import createTables from './db/setup';
 import reportRoutes from './routes/reportRoutes';
+import violationRoutes from './routes/violationRoutes';
 
 // Load environment variables
 dotenv.config();
@@ -28,6 +29,7 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/signals', signalRoutes);
 app.use('/api/alerts', alertRoutes);
 app.use('/api', reportRoutes);
+app.use('/api', violationRoutes);
 
 // Basic Route
 app.get('/', (req: Request, res: Response) => {
