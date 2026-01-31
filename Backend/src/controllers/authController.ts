@@ -40,7 +40,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
   try {
     // 1. Check user
     const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
-    
+
     if (result.rows.length === 0) {
       res.status(400).json({ message: 'Invalid credentials' });
       return;
@@ -75,5 +75,42 @@ export const login = async (req: Request, res: Response): Promise<void> => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error' });
+  }
+};
+
+export const updateProfile = async (req: Request, res: Response): Promise<void> => {
+  const { name } = req.body; // Only extracting name
+  const userId = req.user?.id;
+
+  if (!userId) {
+    res.status(401).json({ message: 'User not authenticated' });
+    return;
+  }
+
+  try {
+    // Strictly update ONLY the name. COALESCE ensures we don't overwrite with null if name is missing (though simpler to just set name=$1 if provided)
+    // Using COALESCE allows partial updates logic if we ever passed more fields, but here we enforce only name.
+    const updateQuery = `
+      UPDATE users 
+      SET name = COALESCE($1, name)
+      WHERE id = $2 
+      RETURNING id, name, email, role
+    `;
+
+    // Pass only name and userId. Email check logic removed.
+    const result = await pool.query(updateQuery, [name, userId]);
+
+    if (result.rows.length === 0) {
+      res.status(404).json({ message: 'User not found' });
+      return;
+    }
+
+    res.json({
+      message: 'Profile updated successfully',
+      user: result.rows[0]
+    });
+  } catch (error) {
+    console.error('Update profile error:', error);
+    res.status(500).json({ message: 'Server error updating profile' });
   }
 };

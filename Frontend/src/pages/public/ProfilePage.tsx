@@ -1,13 +1,76 @@
-import React from 'react';
-import { User, Mail, Phone, MapPin, Bell, Shield, LogOut } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { User, Mail, Phone, MapPin, Bell, Shield, LogOut, Loader2, UserRound } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { useToast } from '@/components/ui/use-toast';
 
 export const ProfilePage: React.FC = () => {
-  const { user, logout } = useAuth();
+  const { user, logout, updateUser } = useAuth();
+  const { toast } = useToast();
+  const [isLoading, setIsLoading] = useState(false);
+  const [formData, setFormData] = useState({
+    name: '',
+    location: '' // Dummy location field (local state only)
+  });
+
+  useEffect(() => {
+    if (user) {
+      setFormData(prev => ({
+        ...prev,
+        name: user.name || '',
+      }));
+    }
+  }, [user]);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { id, value } = e.target;
+    setFormData(prev => ({ ...prev, [id]: value }));
+  };
+
+  const handleSave = async () => {
+    setIsLoading(true);
+    try {
+      const token = localStorage.getItem('traffic_token');
+      // Only sending 'name' to the backend as per requirement
+      const response = await fetch('http://localhost:3000/api/auth/profile', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          name: formData.name
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to update profile');
+      }
+
+      // Update global state with the new user object from backend
+      // Location is not in user object, but we keep it in local state
+      updateUser(data.user);
+
+      toast({
+        title: "Success",
+        description: "Profile updated successfully.",
+        variant: "default",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Something went wrong",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
@@ -21,14 +84,14 @@ export const ProfilePage: React.FC = () => {
       <div className="glow-card p-6">
         <div className="flex flex-col sm:flex-row items-center gap-6">
           <div className="w-24 h-24 rounded-full gradient-bg flex items-center justify-center text-primary-foreground text-3xl font-bold">
-            {user?.name?.charAt(0) || 'U'}
+            <UserRound className="w-12 h-12 text-primary-foreground" />
           </div>
           <div className="text-center sm:text-left">
             <h2 className="text-2xl font-display font-bold">{user?.name || 'User'}</h2>
             <p className="text-muted-foreground">{user?.email}</p>
             <span className="inline-flex items-center gap-1 mt-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-sm font-medium">
               <User className="w-4 h-4" />
-              Public User
+              {user?.role === 'admin' ? 'Administrator' : 'Public User'}
             </span>
           </div>
         </div>
@@ -39,35 +102,39 @@ export const ProfilePage: React.FC = () => {
         <h3 className="text-lg font-display font-semibold mb-4">Personal Information</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
-            <Label htmlFor="fullName">Full Name</Label>
+            <Label htmlFor="name">Full Name</Label>
             <div className="relative">
               <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input id="fullName" defaultValue={user?.name} className="pl-10" />
+              <Input
+                id="name"
+                value={formData.name}
+                onChange={handleInputChange}
+                className="pl-10"
+              />
             </div>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-            <div className="relative">
-              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input id="email" type="email" defaultValue={user?.email} className="pl-10" />
-            </div>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="phone">Phone Number</Label>
-            <div className="relative">
-              <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input id="phone" type="tel" placeholder="+1 (555) 000-0000" className="pl-10" />
-            </div>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="location">Default Location</Label>
+            <Label htmlFor="location">Location</Label>
             <div className="relative">
               <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input id="location" placeholder="Your area" className="pl-10" />
+              <Input
+                id="location"
+                placeholder="Enter your location"
+                value={formData.location}
+                onChange={handleInputChange}
+                className="pl-10"
+              />
             </div>
           </div>
         </div>
-        <Button className="mt-4 gradient-bg">Save Changes</Button>
+        <Button
+          className="mt-4 gradient-bg"
+          onClick={handleSave}
+          disabled={isLoading}
+        >
+          {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          {isLoading ? 'Saving...' : 'Save Changes'}
+        </Button>
       </div>
 
       {/* Notification Preferences */}
