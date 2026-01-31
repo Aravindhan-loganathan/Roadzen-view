@@ -46,6 +46,39 @@ const createTables = async () => {
     );
   `;
 
+  const reportsTable = `
+  CREATE TABLE IF NOT EXISTS reports (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    type VARCHAR(100) NOT NULL,
+    severity VARCHAR(20) NOT NULL CHECK (severity IN ('low', 'medium', 'high', 'critical')),
+    description TEXT NOT NULL,
+    location VARCHAR(255) NOT NULL,
+    status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'resolved', 'in_progress')),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  );
+`;
+
+const createTables = async () => {
+  try {
+    await pool.query(usersTable);
+    await pool.query(trafficSignalsTable);
+    // ...existing code...
+    await pool.query(violationsTable);
+    await pool.query(alertsTable);
+    await pool.query(reportsTable);  // ✅ Add this
+    
+    // Create indexes for better performance
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_reports_user_id ON reports(user_id)');
+    await pool.query('CREATE INDEX IF NOT EXISTS idx_reports_created_at ON reports(created_at DESC)');
+
+    console.log('✅ Database tables checked/created successfully');
+  } catch (error) {
+    console.error('❌ Error creating tables:', error);
+  }
+};
+
   try {
     await pool.query(usersTable);
     await pool.query(trafficSignalsTable);
