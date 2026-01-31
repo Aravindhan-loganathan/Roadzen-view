@@ -1,18 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Navigation, Clock, MapPin, Route, Loader2, AlertTriangle } from 'lucide-react';
+import { Search, Navigation, Clock, MapPin, Route, Loader2, AlertTriangle, ArrowRight, Locate, Share2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap, useMapEvents } from 'react-leaflet';
 import { divIcon } from 'leaflet';
-import { useLocation } from 'react-router-dom';
-
-interface MapMarker {
-  id: number;
-  lat: number;
-  lng: number;
-  name: string;
-  traffic: string;
-}
+import { useNavigate } from 'react-router-dom';
+import { useMapContext } from '@/contexts/MapContext';
 
 interface RouteInfo {
   id: number;
@@ -22,6 +15,7 @@ interface RouteInfo {
   traffic: string;
   path: [number, number][];
   penalty?: number;
+  signalIds: number[];
 }
 
 const deg2rad = (deg: number) => {
@@ -41,21 +35,35 @@ const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => 
 };
 
 export const LiveMap: React.FC = () => {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedRoute, setSelectedRoute] = useState<number | null>(null);
-  const [markers, setMarkers] = useState<MapMarker[]>([]);
+  const {
+    source, setSource,
+    destination, setDestination,
+    suggestedRoutes, setSuggestedRoutes,
+    selectedRoute, setSelectedRoute,
+    showRoutes, setShowRoutes,
+    markers, setMarkers,
+    mapCenter, setMapCenter,
+    mapZoom, setMapZoom
+  } = useMapContext();
+  
   const [loading, setLoading] = useState(true);
   const [isSearching, setIsSearching] = useState(false);
-  const [showRoutes, setShowRoutes] = useState(false);
-  const [suggestedRoutes, setSuggestedRoutes] = useState<RouteInfo[]>([]);
-  const [source, setSource] = useState('Anna Salai Junction');
-  const [destination, setDestination] = useState('Tidel Park Signal');
   const [activeInput, setActiveInput] = useState<'source' | 'destination'>('source');
-  const [sourceSuggestions, setSourceSuggestions] = useState<MapMarker[]>([]);
-  const [destinationSuggestions, setDestinationSuggestions] = useState<MapMarker[]>([]);
-  const location = useLocation();
+  const [sourceSuggestions, setSourceSuggestions] = useState<any[]>([]);
+  const [destinationSuggestions, setDestinationSuggestions] = useState<any[]>([]);
+  const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
+  const [locationError, setLocationError] = useState<string | null>(null);
+  const [shareSuccess, setShareSuccess] = useState<string | null>(null);
+  const navigate = useNavigate();
+
 
   useEffect(() => {
+    // Only fetch if markers are empty (first load)
+    if (markers.length > 0) {
+      setLoading(false);
+      return;
+    }
+
     const fetchMarkers = async () => {
       try {
         const response = await fetch('http://localhost:3000/api/signals');
@@ -81,9 +89,39 @@ export const LiveMap: React.FC = () => {
     };
 
     fetchMarkers();
-    const interval = setInterval(fetchMarkers, 10000); // Refresh every 10s
+    const interval = setInterval(fetchMarkers, 30000); // Reduced from 10s to 30s for better performance
     return () => clearInterval(interval);
-  }, []);
+  }, []); // Only run once on mount (or if empty)
+
+  // Handle URL parameters for shared routes and locations
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const sourceParam = params.get('source');
+    const destinationParam = params.get('destination');
+    const locationParam = params.get('location');
+    const latParam = params.get('lat');
+    const lngParam = params.get('lng');
+
+    if (sourceParam && destinationParam) {
+      // Shared route
+      setSource(decodeURIComponent(sourceParam));
+      setDestination(decodeURIComponent(destinationParam));
+      // Auto-search after a short delay to allow markers to load
+      setTimeout(() => {
+        if (markers.length > 0) {
+          handleSearch();
+        }
+      }, 1000);
+    } else if (locationParam && latParam && lngParam) {
+      // Shared location
+      const lat = parseFloat(latParam);
+      const lng = parseFloat(lngParam);
+      setMapCenter([lat, lng]);
+      setMapZoom(16);
+      setSource(decodeURIComponent(locationParam));
+    }
+  }, [markers.length]); // Run when markers are loaded
+
 
   const getTrafficColor = (traffic: string) => {
     switch (traffic) {
@@ -153,23 +191,35 @@ export const LiveMap: React.FC = () => {
           // Congestion Analysis (Smart Penalty System)
           let congestionPenalty = 0;
           let congestionLevel = 'light';
+          const routeSignalIds: number[] = [];
 
-          // Check for high congestion signals along the route
-          markers.forEach(marker => {
-             // Check if route passes near this marker (within ~300m)
-             const isNear = path.some((point: [number, number]) => {
-                return getDistance(point[0], point[1], marker.lat, marker.lng) < 0.3;
-             });
+          // Identify and Order Signals
+          const matchedSignals = markers
+            .map(marker => {
+              // Find the first point on the path that is close to this marker
+              // We use findIndex to get the position (sequence) of the match
+              const matchIndex = path.findIndex((point: [number, number]) => 
+                getDistance(point[0], point[1], marker.lat, marker.lng) < 0.2 // Increased from 0.05 (50m) to 0.1 (100m)
+              );
+              
+              if (matchIndex !== -1) {
+                 const traffic = marker.traffic ? marker.traffic.toLowerCase() : 'low';
+                 let penalty = 0;
+                 if (traffic === 'high' || traffic === 'heavy') penalty = 10;
+                 else if (traffic === 'medium' || traffic === 'moderate') penalty = 5;
+                 
+                 return { id: marker.id, index: matchIndex, penalty };
+              }
+              return null;
+            })
+            .filter((item): item is { id: number; index: number; penalty: number } => item !== null)
+            .sort((a, b) => a.index - b.index); // Sort by sequence in the path!
 
-             if (isNear) {
-                const traffic = marker.traffic ? marker.traffic.toLowerCase() : 'low';
-                if (traffic === 'high' || traffic === 'heavy') {
-                   congestionPenalty += 10; // 10 min penalty for high congestion
-                } else if (traffic === 'medium' || traffic === 'moderate') {
-                   congestionPenalty += 5; // 5 min penalty for medium congestion
-                }
-             }
-          });
+            // Extract IDs and calculate total penalty
+            matchedSignals.forEach(item => {
+                routeSignalIds.push(item.id);
+                congestionPenalty += item.penalty;
+            });
 
           // Determine overall route traffic status
           if (congestionPenalty >= 15) congestionLevel = 'heavy';
@@ -184,7 +234,8 @@ export const LiveMap: React.FC = () => {
             distance: `${(route.distance / 1000).toFixed(1)} km`,
             traffic: congestionLevel,
             path: path,
-            penalty: congestionPenalty
+            penalty: congestionPenalty,
+            signalIds: routeSignalIds
           };
         });
 
@@ -210,21 +261,151 @@ export const LiveMap: React.FC = () => {
     }
   };
 
-  // Custom icon function to create dynamic pulsing markers
-  const createTrafficIcon = (traffic: string) => {
-    const colorClass = getTrafficColor(traffic);
+  const handleLocateMe = () => {
+    if (!navigator.geolocation) {
+      setLocationError('Geolocation is not supported by your browser');
+      return;
+    }
+
+    setLocationError(null);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        setUserLocation([latitude, longitude]);
+        setMapCenter([latitude, longitude]);
+        setMapZoom(15);
+        setSource(`${latitude.toFixed(4)}, ${longitude.toFixed(4)}`);
+        setLocationError(null);
+      },
+      (error) => {
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            setLocationError('Location permission denied. Please enable location access.');
+            break;
+          case error.POSITION_UNAVAILABLE:
+            setLocationError('Location information unavailable.');
+            break;
+          case error.TIMEOUT:
+            setLocationError('Location request timed out.');
+            break;
+          default:
+            setLocationError('An unknown error occurred.');
+        }
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 5000,
+        maximumAge: 0
+      }
+    );
+  };
+
+  const handleShareRoute = async () => {
+    if (!source || !destination) {
+      setShareSuccess('Please select a route first');
+      setTimeout(() => setShareSuccess(null), 3000);
+      return;
+    }
+
+    const shareUrl = `${window.location.origin}/public/map?source=${encodeURIComponent(source)}&destination=${encodeURIComponent(destination)}`;
+    
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setShareSuccess('Route link copied to clipboard!');
+      setTimeout(() => setShareSuccess(null), 3000);
+    } catch (err) {
+      // Fallback for browsers that don't support clipboard API
+      const textArea = document.createElement('textarea');
+      textArea.value = shareUrl;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      setShareSuccess('Route link copied to clipboard!');
+      setTimeout(() => setShareSuccess(null), 3000);
+    }
+  };
+
+  const handleShareLocation = async (lat: number, lng: number, name: string) => {
+    const shareUrl = `${window.location.origin}/public/map?location=${encodeURIComponent(name)}&lat=${lat}&lng=${lng}`;
+    
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setShareSuccess(`Location "${name}" link copied!`);
+      setTimeout(() => setShareSuccess(null), 3000);
+    } catch (err) {
+      const textArea = document.createElement('textarea');
+      textArea.value = shareUrl;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      setShareSuccess(`Location "${name}" link copied!`);
+      setTimeout(() => setShareSuccess(null), 3000);
+    }
+  };
+
+  // Pre-define and memoize the icons for each traffic level to avoid creating new objects on every render
+  const trafficIcons = React.useMemo(() => {
+    const createIcon = (traffic: string) => {
+      const colorClass = getTrafficColor(traffic);
+      const html = `
+        <div class="relative flex items-center justify-center w-6 h-6">
+          <div class="w-3 h-3 rounded-full ${colorClass} animate-pulse"></div>
+          <div class="absolute w-3 h-3 rounded-full ${colorClass} animate-ping opacity-75"></div>
+        </div>`;
+
+      return divIcon({
+        className: 'bg-transparent border-0',
+        html: html,
+        iconSize: [24, 24],
+      });
+    };
+
+    return {
+      low: createIcon('low'),
+      medium: createIcon('medium'),
+      high: createIcon('high'),
+      light: createIcon('low'),
+      moderate: createIcon('medium'),
+      heavy: createIcon('high'),
+    } as Record<string, any>;
+  }, []);
+
+  // Custom icon for user location (memoized for performance)
+  const userLocationIcon = React.useMemo(() => {
     const html = `
-      <div class="relative flex items-center justify-center w-6 h-6">
-        <div class="w-3 h-3 rounded-full ${colorClass} animate-pulse"></div>
-        <div class="absolute w-3 h-3 rounded-full ${colorClass} animate-ping opacity-75"></div>
+      <div class="relative flex items-center justify-center w-8 h-8">
+        <div class="w-4 h-4 rounded-full bg-blue-500 border-2 border-white shadow-lg"></div>
+        <div class="absolute w-8 h-8 rounded-full bg-blue-500 animate-ping opacity-30"></div>
       </div>`;
 
     return divIcon({
       className: 'bg-transparent border-0',
       html: html,
-      iconSize: [24, 24],
+      iconSize: [32, 32],
     });
+  }, []);
+
+  const handleViewAllRouteSignals = () => {
+    navigate('/public/signals', { state: { routeData: suggestedRoutes } });
   };
+
+  // ChangeView component to handle programmatic map movement
+  const ChangeView = ({ center, zoom }: { center: [number, number], zoom: number }) => {
+    const map = useMap();
+    useEffect(() => {
+      map.setView(center, zoom);
+    }, [center[0], center[1], zoom]); // Only move when external center/zoom changes
+    return null;
+  };
+
+  // Filter markers to show only those on the selected route
+  const displayedMarkers = React.useMemo(() => {
+    if (!selectedRoute) return [];
+    const route = suggestedRoutes.find(r => r.id === selectedRoute);
+    return route ? markers.filter(m => route.signalIds.includes(m.id)) : [];
+  }, [selectedRoute, markers, suggestedRoutes]);
 
   if (loading) {
     return (
@@ -264,7 +445,7 @@ export const LiveMap: React.FC = () => {
     }
   };
 
-  const selectSuggestion = (marker: MapMarker, type: 'source' | 'destination') => {
+  const selectSuggestion = (marker: any, type: 'source' | 'destination') => {
     if (type === 'source') {
       setSource(marker.name);
       setSourceSuggestions([]);
@@ -287,24 +468,27 @@ export const LiveMap: React.FC = () => {
           setDestination(coordString);
         }
       },
+      // Note: We don't sync moveend back to context here to avoid re-render loops during dragging
+      // unless specifically requested for sharing features. 
+      // If we need to sync, we should debounce it.
     });
     return null;
   };
 
   // Component to handle recentering from navigation state (e.g. from Alerts page)
-  const RecenterMap = ({ center, zoom }: { center?: [number, number]; zoom?: number }) => {
+  const RecenterMap = () => {
     const map = useMap();
     useEffect(() => {
-      if (center) {
-        map.setView(center, zoom || 15);
-      }
-    }, [center, zoom, map]);
+       // Only recenter if we are not showing routes (user manually moving map is fine otherwise)
+       // But if we have a saved center, maybe we just use that on initial mount?
+       // Let's rely on MapContainer center for initial, and moveend to save state
+    }, []);
     return null;
   };
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* ... header ... */}
       <div>
         <h1 className="text-2xl md:text-3xl font-display font-bold">Live Traffic Map</h1>
         <p className="text-muted-foreground mt-1">View real-time traffic conditions and find optimal routes</p>
@@ -313,7 +497,7 @@ export const LiveMap: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         {/* Sidebar Controls */}
         <div className="space-y-4">
-          {/* Search */}
+          {/* ... Search ... */}
           <div className="glow-card p-4 space-y-3">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -360,6 +544,33 @@ export const LiveMap: React.FC = () => {
               {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Navigation className="w-4 h-4" />}
               {isSearching ? 'Finding Routes...' : 'Find Route'}
             </Button>
+            <Button 
+              variant="outline"
+              className="w-full gap-2" 
+              onClick={handleLocateMe}
+            >
+              <Locate className="w-4 h-4" />
+              Use My Location
+            </Button>
+            <Button 
+              variant="outline"
+              className="w-full gap-2" 
+              onClick={handleShareRoute}
+              disabled={!source.trim() || !destination.trim()}
+            >
+              <Share2 className="w-4 h-4" />
+              Share Route
+            </Button>
+            {locationError && (
+              <div className="text-xs text-destructive bg-destructive/10 p-2 rounded border border-destructive/20">
+                {locationError}
+              </div>
+            )}
+            {shareSuccess && (
+              <div className="text-xs text-success bg-success/10 p-2 rounded border border-success/20">
+                {shareSuccess}
+              </div>
+            )}
           </div>
 
           {/* Traffic Legend */}
@@ -384,74 +595,124 @@ export const LiveMap: React.FC = () => {
           {/* Suggested Routes */}
           {showRoutes && (
           <div className="glow-card p-4 animate-fade-in">
-            <h3 className="font-semibold mb-3 flex items-center gap-2">
-              <Route className="w-4 h-4" />
-              Suggested Routes
-            </h3>
-            {suggestedRoutes.every(r => r.traffic === 'heavy') && (
+            <div className="flex justify-between items-center mb-3">
+                <h3 className="font-semibold flex items-center gap-2">
+                <Route className="w-4 h-4" />
+                Suggested Routes
+                </h3>
+            </div>
+            
+            {suggestedRoutes.some(r => r.traffic === 'heavy') && (
                <div className="mb-3 p-2 bg-destructive/10 border border-destructive/20 rounded text-xs text-destructive flex items-center gap-2">
                  <AlertTriangle className="w-3 h-3" />
-                 High congestion on all routes.
+                 High congestion detected.
                </div>
             )}
             <div className="space-y-2">
               {suggestedRoutes.map((route) => (
-                <button
-                  key={route.id}
-                  onClick={() => setSelectedRoute(route.id)}
-                  className={`w-full p-3 rounded-lg text-left transition-all ${
-                    selectedRoute === route.id
-                      ? 'bg-primary/10 border border-primary'
-                      : 'bg-muted/50 hover:bg-muted'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-medium text-sm">{route.name}</span>
-                    <div className={`w-2 h-2 rounded-full ${getTrafficColor(route.traffic)}`} />
-                  </div>
-                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                    <span className="flex items-center gap-1">
-                      <Clock className="w-3 h-3" />
-                      {route.time}
-                      {route.penalty !== undefined && route.penalty > 0 && (
-                        <span className="text-destructive font-medium ml-1">
-                          (+{route.penalty}m delay)
-                        </span>
-                      )}
-                    </span>
-                    <span>{route.distance}</span>
-                  </div>
-                </button>
+                <div key={route.id} className="space-y-2">
+                  <button
+                    onClick={() => setSelectedRoute(route.id)}
+                    className={`w-full p-3 rounded-lg text-left transition-all ${
+                      selectedRoute === route.id
+                        ? 'bg-primary/10 border border-primary'
+                        : 'bg-muted/50 hover:bg-muted'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-medium text-sm">{route.name}</span>
+                      <div className={`w-2 h-2 rounded-full ${getTrafficColor(route.traffic)}`} />
+                    </div>
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1">
+                        <Clock className="w-3 h-3" />
+                        {route.time}
+                        {route.penalty !== undefined && route.penalty > 0 && (
+                          <span className="text-destructive font-medium ml-1">
+                            (+{route.penalty}m)
+                          </span>
+                        )}
+                      </span>
+                      <span>{route.distance}</span>
+                    </div>
+                  </button>
+                </div>
               ))}
             </div>
+            
+            <Button 
+                variant="outline"
+                className="w-full mt-4 gap-2"
+                onClick={handleViewAllRouteSignals}
+            >
+                View Detailed Status for All Routes
+                <ArrowRight className="w-4 h-4" />
+            </Button>
           </div>
           )}
         </div>
 
         {/* Map Container */}
-        <div className="lg:col-span-3 glow-card overflow-hidden min-h-[500px] lg:min-h-[600px] z-0">
-          <MapContainer center={[13.03, 80.24]} zoom={12} scrollWheelZoom={true} className="w-full h-full">
-            <RecenterMap center={location.state?.center} zoom={location.state?.zoom} />
+        <div className="lg:col-span-3 glow-card overflow-hidden min-h-[500px] lg:min-h-[600px] relative">
+          <MapContainer 
+            center={mapCenter} 
+            zoom={mapZoom} 
+            scrollWheelZoom={true}
+            dragging={true}
+            doubleClickZoom={true}
+            touchZoom={true}
+            className="w-full h-full"
+            style={{ width: '100%', height: '100%' }}
+          >
+            <ChangeView center={mapCenter} zoom={mapZoom} />
             <MapClickHandler />
             <TileLayer
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
             <FitBoundsToRoute />
-            {selectedRoute && (
-              <Polyline 
-                positions={suggestedRoutes.find(r => r.id === selectedRoute)?.path || []}
-                color={getTrafficHexColor(suggestedRoutes.find(r => r.id === selectedRoute)?.traffic || 'low')}
-                weight={5}
-                opacity={0.7}
-              />
+            {selectedRoute && (() => {
+              const route = suggestedRoutes.find(r => r.id === selectedRoute);
+              if (!route) return null;
+              return (
+                <Polyline 
+                  key={`route-${route.id}-${route.traffic}`}
+                  positions={route.path}
+                  color={getTrafficHexColor(route.traffic)}
+                  weight={6}
+                  opacity={0.8}
+                  lineJoin="round"
+                  lineCap="round"
+                />
+              );
+            })()}
+            {userLocation && (
+              <Marker position={userLocation} icon={userLocationIcon}>
+                <Popup>
+                  <div className="font-sans">
+                    <p className="font-semibold">Your Location</p>
+                    <p className="text-sm text-muted-foreground">Current position</p>
+                  </div>
+                </Popup>
+              </Marker>
             )}
-            {markers.map(marker => (
-              <Marker key={marker.id} position={[marker.lat, marker.lng]} icon={createTrafficIcon(marker.traffic)}>
+            {displayedMarkers.map(marker => (
+              <Marker 
+                key={marker.id} 
+                position={[marker.lat, marker.lng]} 
+                icon={trafficIcons[marker.traffic.toLowerCase()] || trafficIcons.low}
+              >
                 <Popup>
                   <div className="font-sans">
                     <p className="font-semibold">{marker.name}</p>
-                    <p className="text-sm text-muted-foreground capitalize">{marker.traffic} traffic</p>
+                    <p className="text-sm text-muted-foreground capitalize mb-2">{marker.traffic} traffic</p>
+                    <button
+                      onClick={() => handleShareLocation(marker.lat, marker.lng, marker.name)}
+                      className="flex items-center gap-1 text-xs text-primary hover:underline"
+                    >
+                      <Share2 className="w-3 h-3" />
+                      Share Location
+                    </button>
                   </div>
                 </Popup>
               </Marker>
