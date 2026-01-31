@@ -3,6 +3,8 @@ import {
   createReport,
   getMyReports,
   getAllReports,
+  updateReportStatus,
+  deleteReport,
 } from '../controllers/reportController';
 import { authMiddleware } from '../middleware/authMiddleware';
 
@@ -12,15 +14,15 @@ const router = Router();
 // User
 router.post('/reports', authMiddleware, createReport);
 router.get('/reports/my', authMiddleware, getMyReports);
+router.delete('/reports/:id', authMiddleware, deleteReport);
 
 // Admin
 router.get('/admin/reports', authMiddleware, getAllReports);
-import { markReportInProgress } from '../controllers/reportController';
 
 router.patch(
-  '/admin/reports/:id/handle',
+  '/reports/:id/status',
   authMiddleware,
-  markReportInProgress
+  updateReportStatus
 );
 
 

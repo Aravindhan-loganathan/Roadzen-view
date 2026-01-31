@@ -2,11 +2,26 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { submitReport } from '@/services/reportApi';
+import { createReport as submitReport } from '@/services/reportApi';
 import { useToast } from '@/hooks/use-toast';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Severity } from '@/types/report';
 
-export const ReportForm = () => {
+interface ReportFormProps {
+  onSuccess?: () => void;
+}
+
+export const ReportForm = ({ onSuccess }: ReportFormProps) => {
   const { toast } = useToast();
   const [form, setForm] = useState<{
     type: string;
@@ -40,6 +55,7 @@ export const ReportForm = () => {
         description: 'Report submitted successfully',
       });
       setForm({ type: '', severity: 'low' as Severity, description: '', location: '' });
+      if (onSuccess) onSuccess();
     } catch (error) {
       console.error('Report submission error:', error);
       toast({
@@ -101,9 +117,26 @@ export const ReportForm = () => {
         />
       </div>
 
-      <Button onClick={submit} disabled={isSubmitting} className="gradient-bg w-full">
-        {isSubmitting ? 'Submitting...' : 'Submit Report'}
-      </Button>
+      <AlertDialog>
+        <AlertDialogTrigger asChild>
+          <Button disabled={isSubmitting} className="gradient-bg w-full">
+            {isSubmitting ? 'Submitting...' : 'Submit Report'}
+          </Button>
+        </AlertDialogTrigger>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will submit an official report to the traffic management system.
+              Please ensure all details are accurate.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={submit}>Confirm Submit</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
