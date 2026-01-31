@@ -13,15 +13,20 @@ export const ProfilePage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
-    location: '' // Dummy location field (local state only)
+    location: '', // Dummy location field (local state only)
+    phone: '',
+    vehicleNumber: '',
   });
 
   useEffect(() => {
     if (user) {
-      setFormData(prev => ({
-        ...prev,
+      setFormData({
+        
         name: user.name || '',
-      }));
+        location:user.location || '',
+        phone: user.phone || '',
+        vehicleNumber: user.vehicleNumber || '',
+      });
     }
   }, [user]);
 
@@ -42,7 +47,10 @@ export const ProfilePage: React.FC = () => {
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-          name: formData.name
+          name: formData.name,
+          location: formData.location,
+          phone: formData.phone,
+          vehicleNumber: formData.vehicleNumber,
         })
       });
 
@@ -126,6 +134,31 @@ export const ProfilePage: React.FC = () => {
               />
             </div>
           </div>
+          <div className="space-y-2">
+          <Label htmlFor="phone">Phone Number</Label>
+          <div className="relative">
+            <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              id="phone"
+              value={formData.phone}
+              onChange={handleInputChange}
+              className="pl-10"
+              required
+            />
+          </div>
+          </div>
+
+        <div className="space-y-2">
+        <Label htmlFor="vehicleNumber">Vehicle Number</Label>
+        <Input
+          id="vehicleNumber"
+          placeholder="Leave empty if no vehicle"
+          value={formData.vehicleNumber}
+          onChange={handleInputChange}
+        />
+        </div>
+
+
         </div>
         <Button
           className="mt-4 gradient-bg"
