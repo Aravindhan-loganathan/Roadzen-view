@@ -8,6 +8,10 @@ const createTables = async () => {
       email VARCHAR(100) UNIQUE NOT NULL,
       password VARCHAR(255) NOT NULL,
       role VARCHAR(50) DEFAULT 'public',
+      location VARCHAR(255),
+      phone VARCHAR(20),
+      vehicle_number VARCHAR(20),
+
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
   `;

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, Mail, Phone, MapPin, Bell, Shield, LogOut, Loader2, UserRound, Car, X, Lock } from 'lucide-react';
+import { User, Mail, Phone, MapPin, Bell, Shield, LogOut, Loader2, UserRound } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,42 +13,20 @@ export const ProfilePage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
-    location: '',
+    location: '', // Dummy location field (local state only)
     phone: '',
-    vehicle_number: ''
+    vehicleNumber: '',
   });
-
-  // Fetch latest profile data on mount to ensure we have the latest fields (location, phone)
-  useEffect(() => {
-    const fetchProfile = async () => {
-      try {
-        const token = localStorage.getItem('traffic_token');
-        if (!token) return;
-
-        const response = await fetch('http://localhost:3000/api/auth/profile', {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          if (data.user) updateUser(data.user);
-        }
-      } catch (error) {
-        console.error('Failed to fetch profile:', error);
-      }
-    };
-    fetchProfile();
-  }, []);
 
   useEffect(() => {
     if (user) {
-      setFormData(prev => ({
-        ...prev,
+      setFormData({
+        
         name: user.name || '',
-        location: user.location || '',
+        location:user.location || '',
         phone: user.phone || '',
-        vehicle_number: user.vehicle_number || ''
-      }));
+        vehicleNumber: user.vehicleNumber || '',
+      });
     }
   }, [user]);
 
@@ -61,6 +39,7 @@ export const ProfilePage: React.FC = () => {
     setIsLoading(true);
     try {
       const token = localStorage.getItem('traffic_token');
+      // Only sending 'name' to the backend as per requirement
       const response = await fetch('http://localhost:3000/api/auth/profile', {
         method: 'PUT',
         headers: {
@@ -71,7 +50,7 @@ export const ProfilePage: React.FC = () => {
           name: formData.name,
           location: formData.location,
           phone: formData.phone,
-          vehicle_number: formData.vehicle_number
+          vehicleNumber: formData.vehicleNumber,
         })
       });
 
@@ -82,6 +61,7 @@ export const ProfilePage: React.FC = () => {
       }
 
       // Update global state with the new user object from backend
+      // Location is not in user object, but we keep it in local state
       updateUser(data.user);
 
       toast({
@@ -97,50 +77,6 @@ export const ProfilePage: React.FC = () => {
       });
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  // Change Password State
-  const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [passwordData, setPasswordData] = useState({ current: '', new: '', confirm: '' });
-  const [isPasswordLoading, setIsPasswordLoading] = useState(false);
-
-  const handlePasswordChange = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (passwordData.new !== passwordData.confirm) {
-      toast({ title: "Error", description: "New passwords do not match", variant: "destructive" });
-      return;
-    }
-
-    setIsPasswordLoading(true);
-    try {
-      const token = localStorage.getItem('traffic_token');
-      const response = await fetch('http://localhost:3000/api/auth/change-password', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          currentPassword: passwordData.current,
-          newPassword: passwordData.new
-        })
-      });
-
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.message);
-
-      toast({ title: "Success", description: "Password changed successfully" });
-      setShowPasswordModal(false);
-      setPasswordData({ current: '', new: '', confirm: '' });
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to change password",
-        variant: "destructive"
-      });
-    } finally {
-      setIsPasswordLoading(false);
     }
   };
 
@@ -186,19 +122,6 @@ export const ProfilePage: React.FC = () => {
             </div>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="phone">Phone Number</Label>
-            <div className="relative">
-              <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                id="phone"
-                placeholder="Enter your phone number"
-                value={formData.phone}
-                onChange={handleInputChange}
-                className="pl-10"
-              />
-            </div>
-          </div>
-          <div className="space-y-2">
             <Label htmlFor="location">Location</Label>
             <div className="relative">
               <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -212,18 +135,30 @@ export const ProfilePage: React.FC = () => {
             </div>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="vehicle_number">Vehicle Number</Label>
-            <div className="relative">
-              <Car className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                id="vehicle_number"
-                placeholder="e.g., TN-01-AB-1234"
-                value={formData.vehicle_number}
-                onChange={handleInputChange}
-                className="pl-10"
-              />
-            </div>
+          <Label htmlFor="phone">Phone Number</Label>
+          <div className="relative">
+            <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              id="phone"
+              value={formData.phone}
+              onChange={handleInputChange}
+              className="pl-10"
+              required
+            />
           </div>
+          </div>
+
+        <div className="space-y-2">
+        <Label htmlFor="vehicleNumber">Vehicle Number</Label>
+        <Input
+          id="vehicleNumber"
+          placeholder="Leave empty if no vehicle"
+          value={formData.vehicleNumber}
+          onChange={handleInputChange}
+        />
+        </div>
+
+
         </div>
         <Button
           className="mt-4 gradient-bg"
@@ -280,11 +215,9 @@ export const ProfilePage: React.FC = () => {
           Security
         </h3>
         <div className="space-y-3">
-          <Button 
-            variant="outline" 
-            className="w-full justify-start"
-            onClick={() => setShowPasswordModal(true)}
-          >Change Password</Button>
+          <Button variant="outline" className="w-full justify-start">Change Password</Button>
+          <Button variant="outline" className="w-full justify-start">Two-Factor Authentication</Button>
+          <Button variant="outline" className="w-full justify-start">Connected Devices</Button>
         </div>
       </div>
 
@@ -299,53 +232,6 @@ export const ProfilePage: React.FC = () => {
           Sign Out
         </Button>
       </div>
-
-      {/* Change Password Modal */}
-      {showPasswordModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm animate-fade-in">
-          <div className="w-full max-w-md glow-card p-6 m-4 relative bg-card">
-            <button 
-              onClick={() => setShowPasswordModal(false)}
-              className="absolute right-4 top-4 text-muted-foreground hover:text-foreground"
-            >
-              <X className="w-5 h-5" />
-            </button>
-            
-            <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-              <Lock className="w-5 h-5 text-primary" />
-              Change Password
-            </h2>
-            
-            <form onSubmit={handlePasswordChange} className="space-y-4">
-              <div className="space-y-2">
-                <Label>Current Password</Label>
-                <Input type="password" required 
-                  value={passwordData.current}
-                  onChange={e => setPasswordData({...passwordData, current: e.target.value})}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>New Password</Label>
-                <Input type="password" required 
-                  value={passwordData.new}
-                  onChange={e => setPasswordData({...passwordData, new: e.target.value})}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Confirm New Password</Label>
-                <Input type="password" required 
-                  value={passwordData.confirm}
-                  onChange={e => setPasswordData({...passwordData, confirm: e.target.value})}
-                />
-              </div>
-              <Button type="submit" className="w-full gradient-bg" disabled={isPasswordLoading}>
-                {isPasswordLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                Update Password
-              </Button>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

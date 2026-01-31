@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Activity, User, Shield, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { Activity, User, Shield, Eye, EyeOff, Loader2,MapPin } from 'lucide-react';
 import { useAuth, UserRole } from '@/contexts/AuthContext';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,9 @@ export const RegisterPage: React.FC = () => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [location, setLocation] = useState(''); 
+  const [phone, setPhone] = useState('');
+  const [vehicleNumber, setVehicleNumber] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -22,10 +25,30 @@ export const RegisterPage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!location.trim()) {
+      toast({
+        title: 'Error',
+        description: 'Please enter your location',
+        variant: 'destructive',
+      });
+      return;
+    }
+    if (!phone.trim()) {
+      toast({
+        title: 'Error',
+        description: 'Please enter your phone number',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+
+
     setIsLoading(true);
 
     try {
-      const success = await register(name, email, password, role);
+      const success = await register(name, email, password, role, location, phone, vehicleNumber);
       if (success) {
         toast({
           title: 'Registration successful!',
@@ -155,6 +178,45 @@ export const RegisterPage: React.FC = () => {
                 </button>
               </div>
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="location">Location</Label>
+              <div className="relative">
+                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                <Input
+                  id="location"
+                  type="text"
+                  placeholder="Your area / City (e.g., Chennai, Marina)"
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                  required
+                  className="h-12 pl-10"
+                />
+              </div>
+            </div>
+              <div className="space-y-2">
+  <Label htmlFor="phone">Phone Number</Label>
+  <Input
+    id="phone"
+    type="tel"
+    placeholder="Enter your phone number"
+    value={phone}
+    onChange={(e) => setPhone(e.target.value)}
+    required
+    className="h-12"
+  />
+</div>
+<div className="space-y-2">
+  <Label htmlFor="vehicleNumber">Vehicle Number (Optional)</Label>
+  <Input
+    id="vehicleNumber"
+    type="text"
+    placeholder="e.g. TN09AB1234 (leave empty if none)"
+    value={vehicleNumber}
+    onChange={(e) => setVehicleNumber(e.target.value)}
+    className="h-12"
+  />
+</div>
+
 
             <Button
               type="submit"
