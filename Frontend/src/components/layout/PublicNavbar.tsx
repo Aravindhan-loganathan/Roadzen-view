@@ -20,6 +20,7 @@ const navItems = [
   { label: 'Live Map', path: '/public/map', icon: Map },
   { label: 'Signals', path: '/public/signals', icon: Radio },
   { label: 'Alerts', path: '/public/alerts', icon: AlertTriangle },
+  { label: 'Report Issue', path: '/public/report', icon: AlertTriangle },
   { label: 'Profile', path: '/public/profile', icon: User },
 ];
 

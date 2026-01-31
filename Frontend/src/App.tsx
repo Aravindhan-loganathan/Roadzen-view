@@ -26,6 +26,7 @@ import { TrafficViolations } from "@/pages/admin/TrafficViolations";
 import { Reports } from "@/pages/admin/Reports";
 import { SettingsPage } from "@/pages/admin/SettingsPage";
 import NotFound from "@/pages/NotFound";
+import { ReportIssuePage } from "@/pages/public/ReportIssuePage";
 
 const queryClient = new QueryClient();
 
@@ -62,6 +63,7 @@ const App = () => (
                 <Route path="map" element={<LiveMap />} />
                 <Route path="signals" element={<SignalStatus />} />
                 <Route path="alerts" element={<AlertsPage />} />
+                <Route path="report" element={<ReportIssuePage />} />
                 <Route path="profile" element={<ProfilePage />} />
               </Route>
 
