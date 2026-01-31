@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Navigation, Clock, MapPin, Route, Loader2, AlertTriangle, ArrowRight, Locate, Share2 } from 'lucide-react';
+import { Search, Navigation, Clock, MapPin, Route, Loader2, AlertTriangle, ArrowRight, Locate, Share2, Save, Star, Trash2, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap, useMapEvents } from 'react-leaflet';
@@ -16,6 +16,13 @@ interface RouteInfo {
   path: [number, number][];
   penalty?: number;
   signalIds: number[];
+}
+
+interface SavedLocation {
+  id: number;
+  name: string;
+  latitude: number;
+  longitude: number;
 }
 
 const deg2rad = (deg: number) => {
@@ -54,6 +61,11 @@ export const LiveMap: React.FC = () => {
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
   const [shareSuccess, setShareSuccess] = useState<string | null>(null);
+  const [isSavingLocation, setIsSavingLocation] = useState(false);
+  const [savedLocations, setSavedLocations] = useState<SavedLocation[]>([]);
+  const [showNameDialog, setShowNameDialog] = useState(false);
+  const [tempLocation, setTempLocation] = useState<{lat: number, lng: number} | null>(null);
+  const [newLocationName, setNewLocationName] = useState('');
   const navigate = useNavigate();
 
 
@@ -92,6 +104,23 @@ export const LiveMap: React.FC = () => {
     const interval = setInterval(fetchMarkers, 30000); // Reduced from 10s to 30s for better performance
     return () => clearInterval(interval);
   }, []); // Only run once on mount (or if empty)
+
+  // Fetch saved locations
+  const fetchSavedLocations = async () => {
+    try {
+      const response = await fetch('http://localhost:3000/api/saved-locations?user_id=1');
+      if (response.ok) {
+        const data = await response.json();
+        setSavedLocations(data);
+      }
+    } catch (error) {
+      console.error('Error fetching saved locations:', error);
+    }
+  };
+
+  useEffect(() => {
+    fetchSavedLocations();
+  }, []);
 
   // Handle URL parameters for shared routes and locations
   useEffect(() => {
@@ -345,6 +374,70 @@ export const LiveMap: React.FC = () => {
     }
   };
 
+  const handleMapClickForSave = (lat: number, lng: number) => {
+    setTempLocation({ lat, lng });
+    setShowNameDialog(true);
+  };
+
+  const confirmSaveLocation = async () => {
+    if (!newLocationName.trim() || !tempLocation) return;
+    
+    try {
+      const response = await fetch('http://localhost:3000/api/saved-locations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newLocationName,
+          latitude: tempLocation.lat,
+          longitude: tempLocation.lng,
+          user_id: 1 // Assuming a default user or handled by session in backend
+        }),
+      });
+
+      if (response.ok) {
+        setShareSuccess(`Location "${name}" saved successfully!`);
+        setTimeout(() => setShareSuccess(null), 3000);
+        fetchSavedLocations();
+      } else {
+        setLocationError('Failed to save location');
+        setTimeout(() => setLocationError(null), 3000);
+      }
+    } catch (error) {
+      console.error('Error saving location:', error);
+      setLocationError('Error saving location');
+      setTimeout(() => setLocationError(null), 3000);
+    } finally {
+      setShowNameDialog(false);
+      setNewLocationName('');
+      setTempLocation(null);
+      setIsSavingLocation(false);
+    }
+  };
+
+  const cancelSaveLocation = () => {
+    setShowNameDialog(false);
+    setNewLocationName('');
+    setTempLocation(null);
+    setIsSavingLocation(false);
+  };
+
+  const handleDeleteLocation = async (id: number) => {
+    if (!window.confirm("Are you sure you want to delete this saved location?")) return;
+
+    try {
+      const response = await fetch(`http://localhost:3000/api/saved-locations/${id}`, {
+        method: 'DELETE',
+      });
+      if (response.ok) {
+        fetchSavedLocations();
+        setShareSuccess('Location deleted');
+        setTimeout(() => setShareSuccess(null), 3000);
+      }
+    } catch (error) {
+      console.error('Error deleting location:', error);
+    }
+  };
+
   // Pre-define and memoize the icons for each traffic level to avoid creating new objects on every render
   const trafficIcons = React.useMemo(() => {
     const createIcon = (traffic: string) => {
@@ -384,6 +477,22 @@ export const LiveMap: React.FC = () => {
       className: 'bg-transparent border-0',
       html: html,
       iconSize: [32, 32],
+    });
+  }, []);
+
+  // Custom icon for saved locations
+  const savedLocationIcon = React.useMemo(() => {
+    const html = `
+      <div class="relative flex items-center justify-center w-8 h-8">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#eab308" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-8 h-8 drop-shadow-md text-white"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+      </div>`;
+
+    return divIcon({
+      className: 'bg-transparent border-0',
+      html: html,
+      iconSize: [32, 32],
+      iconAnchor: [16, 16],
+      popupAnchor: [0, -16]
     });
   }, []);
 
@@ -453,6 +562,12 @@ export const LiveMap: React.FC = () => {
     useMapEvents({
       click(e) {
         const { lat, lng } = e.latlng;
+
+        if (isSavingLocation) {
+          handleMapClickForSave(lat, lng);
+          return;
+        }
+
         const coordString = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
         
         if (activeInput === 'source') {
@@ -554,6 +669,14 @@ export const LiveMap: React.FC = () => {
             >
               <Share2 className="w-4 h-4" />
               Share Route
+            </Button>
+            <Button 
+              variant={isSavingLocation ? "default" : "outline"}
+              className={`w-full gap-2 ${isSavingLocation ? 'ring-2 ring-primary animate-pulse' : ''}`}
+              onClick={() => setIsSavingLocation(!isSavingLocation)}
+            >
+              <Save className="w-4 h-4" />
+              {isSavingLocation ? 'Click Map to Save' : 'Save Location'}
             </Button>
             {locationError && (
               <div className="text-xs text-destructive bg-destructive/10 p-2 rounded border border-destructive/20">
@@ -690,6 +813,29 @@ export const LiveMap: React.FC = () => {
                 </Popup>
               </Marker>
             )}
+            {savedLocations.map(loc => (
+              <Marker 
+                key={`saved-${loc.id}`} 
+                position={[loc.latitude, loc.longitude]} 
+                icon={savedLocationIcon}
+              >
+                <Popup>
+                  <div className="font-sans min-w-[150px]">
+                    <p className="font-bold text-base mb-1">{loc.name}</p>
+                    <p className="text-xs text-muted-foreground mb-3">Saved Location</p>
+                    <Button 
+                      variant="destructive" 
+                      size="sm" 
+                      className="w-full h-8 text-xs"
+                      onClick={() => handleDeleteLocation(loc.id)}
+                    >
+                      <Trash2 className="w-3 h-3 mr-2" />
+                      Delete
+                    </Button>
+                  </div>
+                </Popup>
+              </Marker>
+            ))}
             {displayedMarkers.map(marker => (
               <Marker 
                 key={marker.id} 
@@ -713,6 +859,35 @@ export const LiveMap: React.FC = () => {
             ))}
           </MapContainer>
         </div>
+
+        {/* Save Location Modal Overlay */}
+        {showNameDialog && (
+          <div className="absolute inset-0 z-[1000] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+            <div className="bg-background p-6 rounded-lg shadow-xl w-full max-w-sm border border-border animate-in fade-in zoom-in duration-200">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="font-bold text-lg">Save Location</h3>
+                <button onClick={cancelSaveLocation} className="text-muted-foreground hover:text-foreground">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <p className="text-sm text-muted-foreground mb-4">
+                Enter a name for this location to save it to your map.
+              </p>
+              <Input 
+                value={newLocationName} 
+                onChange={e => setNewLocationName(e.target.value)}
+                placeholder="e.g., Home, Office, Gym"
+                className="mb-4"
+                autoFocus
+                onKeyDown={(e) => e.key === 'Enter' && confirmSaveLocation()}
+              />
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={cancelSaveLocation}>Cancel</Button>
+                <Button onClick={confirmSaveLocation} disabled={!newLocationName.trim()}>Save Location</Button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
