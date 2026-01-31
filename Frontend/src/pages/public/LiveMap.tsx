@@ -416,14 +416,8 @@ export const LiveMap: React.FC = () => {
   }
 
   // Component to auto-fit the map to the selected route
+  // Fully disabled as per user request to avoid annoying automatic zooming
   const FitBoundsToRoute = () => {
-    const map = useMap();
-    useEffect(() => {
-      const selected = suggestedRoutes.find(r => r.id === selectedRoute);
-      if (selected && selected.path.length > 0) {
-        map.fitBounds(selected.path);
-      }
-    }, [selectedRoute]);
     return null;
   };
 
@@ -657,9 +651,9 @@ export const LiveMap: React.FC = () => {
           <MapContainer 
             center={mapCenter} 
             zoom={mapZoom} 
-            scrollWheelZoom={true}
+            scrollWheelZoom="center"
             dragging={true}
-            doubleClickZoom={true}
+            doubleClickZoom={false}
             touchZoom={true}
             className="w-full h-full"
             style={{ width: '100%', height: '100%' }}

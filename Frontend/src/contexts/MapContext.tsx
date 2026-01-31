@@ -36,6 +36,7 @@ interface MapContextType {
   setMapCenter: (center: [number, number]) => void;
   mapZoom: number;
   setMapZoom: (zoom: number) => void;
+  resetMap: () => void;
 }
 
 const MapContext = createContext<MapContextType | undefined>(undefined);
@@ -50,6 +51,16 @@ export const MapProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [mapCenter, setMapCenter] = useState<[number, number]>([13.03, 80.24]);
   const [mapZoom, setMapZoom] = useState(12);
 
+  const resetMap = () => {
+    setSource('Anna Salai Junction');
+    setDestination('Tidel Park Signal');
+    setSuggestedRoutes([]);
+    setSelectedRoute(null);
+    setShowRoutes(false);
+    setMapCenter([13.03, 80.24]);
+    setMapZoom(12);
+  };
+
   return (
     <MapContext.Provider value={{
       source, setSource,
@@ -59,7 +70,8 @@ export const MapProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       showRoutes, setShowRoutes,
       markers, setMarkers,
       mapCenter, setMapCenter,
-      mapZoom, setMapZoom
+      mapZoom, setMapZoom,
+      resetMap
     }}>
       {children}
     </MapContext.Provider>

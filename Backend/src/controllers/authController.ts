@@ -28,7 +28,7 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       `INSERT INTO users (name, email, password, role, location, phone, vehicle_number)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING id, name, email, role, location, phone, vehicle_number`,
-      [name, email, hashedPassword, role || 'public', location, phone , vehicleNumber || null]
+      [name, email, hashedPassword, role || 'user', location, phone , vehicleNumber || null]
     );
 
     res.status(201).json({

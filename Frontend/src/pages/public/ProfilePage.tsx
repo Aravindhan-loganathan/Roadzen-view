@@ -13,10 +13,18 @@ export const ProfilePage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
-    location: '', // Dummy location field (local state only)
+    location: '',
     phone: '',
     vehicleNumber: '',
   });
+
+  const [passwordData, setPasswordData] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+  });
+  const [showPasswordChange, setShowPasswordChange] = useState(false);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -77,6 +85,65 @@ export const ProfilePage: React.FC = () => {
       });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      toast({
+        title: "Error",
+        description: "New passwords do not match.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (passwordData.newPassword.length < 6) {
+      toast({
+        title: "Error",
+        description: "Password must be at least 6 characters long.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsChangingPassword(true);
+    try {
+      const token = localStorage.getItem('traffic_token');
+      const response = await fetch('http://localhost:3000/api/auth/change-password', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          currentPassword: passwordData.currentPassword,
+          newPassword: passwordData.newPassword,
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to change password');
+      }
+
+      toast({
+        title: "Success",
+        description: "Password updated successfully.",
+      });
+      
+      setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      setShowPasswordChange(false);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to change password",
+        variant: "destructive",
+      });
+    } finally {
+      setIsChangingPassword(false);
     }
   };
 
@@ -214,10 +281,63 @@ export const ProfilePage: React.FC = () => {
           <Shield className="w-5 h-5" />
           Security
         </h3>
-        <div className="space-y-3">
-          <Button variant="outline" className="w-full justify-start">Change Password</Button>
-          <Button variant="outline" className="w-full justify-start">Two-Factor Authentication</Button>
-          <Button variant="outline" className="w-full justify-start">Connected Devices</Button>
+        <div className="space-y-4">
+          <Button 
+            variant="outline" 
+            className="w-full justify-between"
+            onClick={() => setShowPasswordChange(!showPasswordChange)}
+          >
+            Change Password
+            <Shield className={`w-4 h-4 transition-transform ${showPasswordChange ? 'rotate-180' : ''}`} />
+          </Button>
+
+          {showPasswordChange && (
+            <form onSubmit={handleChangePassword} className="space-y-4 p-4 border border-border rounded-lg animate-in slide-in-from-top-2 duration-300">
+              <div className="space-y-2">
+                <Label htmlFor="currentPassword">Current Password</Label>
+                <Input
+                  id="currentPassword"
+                  type="password"
+                  value={passwordData.currentPassword}
+                  onChange={(e) => setPasswordData(prev => ({ ...prev, currentPassword: e.target.value }))}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="newPassword">New Password</Label>
+                <Input
+                  id="newPassword"
+                  type="password"
+                  value={passwordData.newPassword}
+                  onChange={(e) => setPasswordData(prev => ({ ...prev, newPassword: e.target.value }))}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="confirmPassword">Confirm New Password</Label>
+                <Input
+                  id="confirmPassword"
+                  type="password"
+                  value={passwordData.confirmPassword}
+                  onChange={(e) => setPasswordData(prev => ({ ...prev, confirmPassword: e.target.value }))}
+                  required
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button type="submit" className="gradient-bg" disabled={isChangingPassword}>
+                  {isChangingPassword ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  Update Password
+                </Button>
+                <Button 
+                  type="button" 
+                  variant="ghost" 
+                  onClick={() => setShowPasswordChange(false)}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          )}
         </div>
       </div>
 

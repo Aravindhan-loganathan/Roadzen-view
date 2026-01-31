@@ -41,7 +41,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (response.ok) {
         const data = await response.json();
 
-        // Map backend role to frontend role (handle 'public' -> 'user')
+        // Map backend role to frontend role (handle 'user' -> 'user')
         const mappedRole: UserRole = data.user.role === 'admin' ? 'admin' : 'user';
 
         // Verify that the authenticated user's role matches the selected role
@@ -77,7 +77,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ name, email, password, role: role === 'admin' ? 'admin' : 'public', location, phone, vehicleNumber }),
+        body: JSON.stringify({ name, email, password, role: role === 'admin' ? 'admin' : 'user', location, phone, vehicleNumber }),
       });
 
       return response.ok;
