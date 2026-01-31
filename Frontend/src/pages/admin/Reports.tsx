@@ -73,11 +73,13 @@ export const Reports: React.FC = () => {
 
         const data = await response.json();
         
-        // Ensure data is an array
+        // Handle both array (legacy) and object with reports property (new)
         if (Array.isArray(data)) {
           setUserReports(data);
+        } else if (data && Array.isArray(data.reports)) {
+          setUserReports(data.reports);
         } else {
-          console.warn('API response is not an array:', data);
+          console.warn('API response is not an array or object with reports:', data);
           setUserReports([]);
         }
       } catch (err) {
@@ -145,6 +147,8 @@ export const Reports: React.FC = () => {
       setHandlingReportId(null);
     }
   };
+
+
 
 
   return (
@@ -260,13 +264,13 @@ export const Reports: React.FC = () => {
                       <span className="flex items-center gap-1">
                         <MapPin className="w-4 h-4" /> {report.location}
                       </span>
-                      <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2">
                     <span className={`px-2 py-1 rounded text-xs font-medium ${
                       report.status === 'pending' ? 'bg-yellow-500/20 text-yellow-700' : 
                       report.status === 'in_progress' ? 'bg-blue-500/20 text-blue-700' :
                       'bg-green-500/20 text-green-700'
                     }`}>
-                      {report.status.toUpperCase()}
+                      {report.status.toUpperCase().replace('_', ' ')}
                     </span>
                     <Button
                       size="sm"
