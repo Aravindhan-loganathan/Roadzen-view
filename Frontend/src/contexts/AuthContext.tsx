@@ -14,6 +14,7 @@ interface AuthContextType {
   login: (email: string, password: string, role: UserRole) => Promise<boolean>;
   register: (name: string, email: string, password: string, role: UserRole) => Promise<boolean>;
   logout: () => void;
+  updateUser: (user: User) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -36,7 +37,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       if (response.ok) {
         const data = await response.json();
-        
+
         // Map backend role to frontend role (handle 'public' -> 'user')
         const mappedRole: UserRole = data.user.role === 'admin' ? 'admin' : 'user';
 
@@ -50,7 +51,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           role: mappedRole,
           name: data.user.name,
         };
-        
+
         setUser(newUser);
         localStorage.setItem('traffic_user', JSON.stringify(newUser));
         localStorage.setItem('traffic_token', data.token);
@@ -86,8 +87,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     localStorage.removeItem('traffic_token');
   }, []);
 
+  const updateUser = useCallback((userData: User) => {
+    setUser(userData);
+    localStorage.setItem('traffic_user', JSON.stringify(userData));
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated: !!user, login, register, logout }}>
+    <AuthContext.Provider value={{ user, isAuthenticated: !!user, login, register, logout, updateUser }}>
       {children}
     </AuthContext.Provider>
   );
