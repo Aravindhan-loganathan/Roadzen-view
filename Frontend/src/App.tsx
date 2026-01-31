@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
+import { MapProvider } from "@/contexts/MapContext";
 
 // Layouts
 import { PublicLayout } from "@/components/layout/PublicLayout";
@@ -27,6 +28,7 @@ import { Reports } from "@/pages/admin/Reports";
 import { SettingsPage } from "@/pages/admin/SettingsPage";
 import NotFound from "@/pages/NotFound";
 import { ReportIssuePage } from "@/pages/public/ReportIssuePage";
+import { UserManagement } from "@/pages/admin/UserManagement";
 
 const queryClient = new QueryClient();
 
@@ -45,7 +47,8 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider>
       <AuthProvider>
-        <TooltipProvider>
+        <MapProvider>
+          <TooltipProvider>
           <Toaster />
           <Sonner />
           <BrowserRouter>
@@ -76,6 +79,7 @@ const App = () => (
                 <Route path="violations" element={<TrafficViolations />} />
                 <Route path="reports" element={<Reports />} />
                 <Route path="settings" element={<SettingsPage />} />
+                <Route path="users" element={<UserManagement />} />
               </Route>
 
               {/* 404 */}
@@ -83,6 +87,7 @@ const App = () => (
             </Routes>
           </BrowserRouter>
         </TooltipProvider>
+        </MapProvider>
       </AuthProvider>
     </ThemeProvider>
   </QueryClientProvider>

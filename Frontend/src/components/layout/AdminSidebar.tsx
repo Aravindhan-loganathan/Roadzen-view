@@ -15,6 +15,7 @@ import {
   UserRound,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useMapContext } from '@/contexts/MapContext';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -27,11 +28,13 @@ const navItems = [
   { label: 'Traffic Violation', path: '/admin/violations', icon: AlertOctagon },
   { label: 'Reports', path: '/admin/reports', icon: FileText },
   { label: 'Settings', path: '/admin/settings', icon: Settings },
+  { label: 'User Management', path: '/admin/users', icon: UserRound },
 ];
 
 export const AdminSidebar: React.FC = () => {
   const [collapsed, setCollapsed] = useState(false);
   const { logout, user } = useAuth();
+  const { resetMap } = useMapContext();
   const location = useLocation();
 
   return (
@@ -102,7 +105,10 @@ export const AdminSidebar: React.FC = () => {
           <Button
             variant="ghost"
             size="icon"
-            onClick={logout}
+            onClick={() => {
+              resetMap();
+              logout();
+            }}
             className="text-muted-foreground hover:text-destructive"
             title="Logout"
           >

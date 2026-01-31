@@ -6,13 +6,16 @@ interface User {
   email: string;
   role: UserRole;
   name: string;
+  location: string;
+  phone: string;
+  vehicleNumber?: string;
 }
 
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   login: (email: string, password: string, role: UserRole) => Promise<boolean>;
-  register: (name: string, email: string, password: string, role: UserRole) => Promise<boolean>;
+  register: (name: string, email: string, password: string, role: UserRole, location: string, phone: string, vehicleNumber?: string) => Promise<boolean>;
   logout: () => void;
   updateUser: (user: User) => void;
 }
@@ -38,7 +41,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (response.ok) {
         const data = await response.json();
 
-        // Map backend role to frontend role (handle 'public' -> 'user')
+        // Map backend role to frontend role (handle 'user' -> 'user')
         const mappedRole: UserRole = data.user.role === 'admin' ? 'admin' : 'user';
 
         // Verify that the authenticated user's role matches the selected role
@@ -50,6 +53,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           email: data.user.email,
           role: mappedRole,
           name: data.user.name,
+          location: data.user.location,
+          phone: data.user.phone,
+          vehicleNumber: data.user.vehicleNumber,
         };
 
         setUser(newUser);
@@ -64,14 +70,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, []);
 
-  const register = useCallback(async (name: string, email: string, password: string, role: UserRole): Promise<boolean> => {
+  const register = useCallback(async (name: string, email: string, password: string, role: UserRole, location: string, phone: string, vehicleNumber?: string): Promise<boolean> => {
     try {
       const response = await fetch('http://localhost:3000/api/auth/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ name, email, password, role }),
+        body: JSON.stringify({ name, email, password, role: role === 'admin' ? 'admin' : 'user', location, phone, vehicleNumber }),
       });
 
       return response.ok;

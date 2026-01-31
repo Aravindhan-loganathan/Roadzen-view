@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Radio, RefreshCw, Loader2 } from 'lucide-react';
 import { TrafficSignal } from '@/components/ui/TrafficSignal';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
+import { RefreshCw, Loader2, X, AlertTriangle, ArrowLeft, Clock, Route, Radio } from 'lucide-react';
+import { useMapContext } from '@/contexts/MapContext';
 
 interface JunctionData {
   id: number;
@@ -10,10 +13,30 @@ interface JunctionData {
   congestionLevel: string;
 }
 
+interface RouteSignalData {
+    id: number;
+    name: string;
+    time: string;
+    distance: string;
+    traffic: string;
+    penalty: number;
+    signalIds: number[];
+}
+
 export const SignalStatus: React.FC = () => {
   const [signalData, setSignalData] = useState<JunctionData[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState(new Date());
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { suggestedRoutes } = useMapContext();
+  
+  // Two modes: 
+  // 1. Direct from manual "View Route Signals" (Legacy or specific single route) -> filterIds
+  // 2. From "View All Routes" -> routeData (array of routes)
+  // Use context routes if available, otherwise fallback to navigation state (though context is preferred now)
+  const routeData = suggestedRoutes.length > 0 ? suggestedRoutes : (location.state?.routeData as any[] | undefined);
+  const filterIds = location.state?.filterIds as number[] | undefined;
 
   const fetchSignals = async () => {
     try {
@@ -56,6 +79,10 @@ export const SignalStatus: React.FC = () => {
     };
   }, []);
 
+  const clearFilter = () => {
+    navigate('/public/map');
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -63,6 +90,14 @@ export const SignalStatus: React.FC = () => {
       </div>
     );
   }
+
+  // Helper to get needed signals for a route
+  const getSignalsForRoute = (ids: number[]) => {
+      return signalData.filter(s => ids.includes(s.id));
+  };
+
+
+  const hasActiveView = (routeData && routeData.length > 0) || (filterIds && filterIds.length > 0);
 
   const getCongestionStyle = (level: string) => {
     switch (level) {
@@ -77,120 +112,148 @@ export const SignalStatus: React.FC = () => {
     }
   };
 
-  const getNextQueue = (current: string) => {
-    const directions = ['North', 'East', 'South', 'West'];
-    const currentIndex = directions.indexOf(current);
-    return directions[(currentIndex + 1) % 4];
-  };
-
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h1 className="text-2xl md:text-3xl font-display font-bold">Signal Status</h1>
-          <p className="text-muted-foreground mt-1">Live traffic signal information at all junctions</p>
+          <p className="text-muted-foreground mt-1">
+            {hasActiveView ? 'Route specific signal information' : 'Real-time Traffic Signal Monitor'}
+          </p>
         </div>
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <RefreshCw className="w-4 h-4 animate-spin" />
-          Auto-refresh: {lastRefresh.toLocaleTimeString()}
-        </div>
-      </div>
-
-      {/* Signal Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {signalData.map((junction, index) => (
-          <div
-            key={junction.id}
-            className="glow-card p-5 animate-fade-in"
-            style={{ animationDelay: `${index * 50}ms` }}
-          >
-            <div className="flex items-start justify-between">
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-3">
-                  <Radio className="w-4 h-4 text-primary" />
-                  <h3 className="font-semibold">{junction.name}</h3>
-                </div>
-
-                {/* Current Green */}
-                <div className="mb-4">
-                  <p className="text-xs text-muted-foreground mb-1">Current Green Signal</p>
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full bg-success animate-pulse" />
-                    <span className="font-medium text-lg">{junction.currentGreen}</span>
-                  </div>
-                </div>
-
-                {/* Countdown Timer */}
-                <div className="mb-4">
-                  <p className="text-xs text-muted-foreground mb-1">Time Remaining</p>
-                  <div className="flex items-center gap-2">
-                    <div className="relative w-16 h-16">
-                      <svg className="w-16 h-16 transform -rotate-90">
-                        <circle
-                          cx="32"
-                          cy="32"
-                          r="28"
-                          stroke="hsl(var(--muted))"
-                          strokeWidth="4"
-                          fill="none"
-                        />
-                        <circle
-                          cx="32"
-                          cy="32"
-                          r="28"
-                          stroke="hsl(var(--primary))"
-                          strokeWidth="4"
-                          fill="none"
-                          strokeLinecap="round"
-                          strokeDasharray={175.9}
-                          strokeDashoffset={175.9 - (junction.countdown / 30) * 175.9}
-                          className="transition-all duration-1000"
-                        />
-                      </svg>
-                      <span className="absolute inset-0 flex items-center justify-center font-display font-bold text-xl">
-                        {junction.countdown}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Next Signal */}
-                <div className="mb-4">
-                  <p className="text-xs text-muted-foreground mb-1">Next in Queue</p>
-                  <span className="text-sm font-medium">{getNextQueue(junction.currentGreen)} Lane</span>
-                </div>
-
-                {/* Congestion Priority */}
-                <div>
-                  <p className="text-xs text-muted-foreground mb-1">Congestion Priority</p>
-                  <span
-                    className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${getCongestionStyle(
-                      junction.congestionLevel
-                    )}`}
-                  >
-                    {junction.congestionLevel.charAt(0).toUpperCase() + junction.congestionLevel.slice(1)}
-                  </span>
-                </div>
-              </div>
-
-              {/* Traffic Signal Visual */}
-              <TrafficSignal
-                initialState={junction.countdown < 5 ? 'yellow' : 'green'}
-                countdown={junction.countdown}
-                size="lg"
-              />
+        <div className="flex items-center gap-4">
+           {hasActiveView && (
+             <Button variant="outline" size="sm" onClick={clearFilter} className="gap-2">
+               <ArrowLeft className="w-4 h-4" />
+               Back to Map
+             </Button>
+           )}
+           {hasActiveView && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <RefreshCw className="w-4 h-4 animate-spin" />
+                Live Sync
             </div>
-          </div>
-        ))}
+           )}
+        </div>
       </div>
 
-      {/* Info Card */}
-      <div className="glow-card p-4 bg-muted/30">
-        <p className="text-sm text-muted-foreground text-center">
-          Signal timings are optimized by AI based on real-time traffic density analysis
-        </p>
-      </div>
+      {/* Content */}
+      {!hasActiveView ? (
+          <div className="flex flex-col items-center justify-center min-h-[400px] text-center border rounded-lg bg-card/50 p-8">
+              <div className="p-4 bg-primary/10 rounded-full mb-4">
+                  <Route className="w-8 h-8 text-primary" />
+              </div>
+              <h3 className="text-xl font-semibold mb-2">No Route Selected</h3>
+              <p className="text-muted-foreground max-w-md mb-6">
+                  Please go to the Live Map to search for a route. Once found, this page will automatically update with detailed signal information.
+              </p>
+              <Button onClick={() => navigate('/public/map')} className="gap-2">
+                  <ArrowLeft className="w-4 h-4" />
+                  Go to Live Map
+              </Button>
+          </div>
+      ) : (
+        <div className="space-y-8">
+            {/* If we have multiple routes data */}
+            {routeData && routeData.map((route, rIndex) => {
+                const routeSignals = getSignalsForRoute(route.signalIds);
+                return (
+                    <div key={route.id} className="border rounded-xl p-6 bg-card/50">
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 pb-4 border-b">
+                           <div>
+                                <h2 className="text-xl font-semibold flex items-center gap-2">
+                                    <div className="bg-primary/10 p-1 rounded text-primary text-sm font-bold">
+                                        Route {rIndex + 1}
+                                    </div>
+                                    {route.name}
+                                </h2>
+                                <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
+                                    <span className="flex items-center gap-1">
+                                        <Clock className="w-3 h-3" /> {route.time}
+                                    </span>
+                                    <span>{route.distance}</span>
+                                    <span className={`capitalize px-2 py-0.5 rounded-full text-xs border ${
+                                        route.traffic === 'heavy' ? 'bg-destructive/10 border-destructive/20 text-destructive' :
+                                        route.traffic === 'moderate' ? 'bg-warning/10 border-warning/20 text-warning' :
+                                        'bg-success/10 border-success/20 text-success'
+                                    }`}>
+                                        {route.traffic} Traffic
+                                    </span>
+                                </div>
+                           </div>
+                           {route.penalty !== undefined && route.penalty > 0 && (
+                               <div className="px-3 py-1 bg-destructive/10 text-destructive text-sm rounded-md flex items-center gap-2">
+                                   <AlertTriangle className="w-4 h-4" />
+                                   +{route.penalty} min due to congestion
+                               </div>
+                           )}
+                        </div>
+                        
+                        {routeSignals.length > 0 ? (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                {routeSignals.map(junction => (
+                                    <div key={junction.id} className="glow-card p-5">
+                                      <div className="flex items-start justify-between">
+                                        <div className="flex-1">
+                                          <div className="flex items-center gap-2 mb-3">
+                                            <Radio className="w-4 h-4 text-primary" />
+                                            <h3 className="font-semibold">{junction.name}</h3>
+                                          </div>
+                                          
+                                          <div className="mb-4">
+                                            <p className="text-xs text-muted-foreground mb-1">Current Green Signal</p>
+                                            <p className="font-medium text-lg text-primary">{junction.currentGreen}</p>
+                                          </div>
+
+                                          <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${getCongestionStyle(junction.congestionLevel)}`}>
+                                            {junction.congestionLevel} Congestion
+                                          </div>
+                                        </div>
+                                        <TrafficSignal countdown={junction.countdown} />
+                                      </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <p className="text-muted-foreground text-sm italic">No monitored signals on this route segment.</p>
+                        )}
+                    </div>
+                );
+            })}
+
+            {/* Legacy Single Selection Fallback */}
+            {!routeData && filterIds && (
+                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                 {getSignalsForRoute(filterIds).map((junction) => (
+                   <div
+                     key={junction.id}
+                     className="glow-card p-5 animate-fade-in"
+                   >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-3">
+                            <Radio className="w-4 h-4 text-primary" />
+                            <h3 className="font-semibold">{junction.name}</h3>
+                          </div>
+                          
+                          <div className="mb-4">
+                            <p className="text-xs text-muted-foreground mb-1">Current Green Signal</p>
+                            <p className="font-medium text-lg text-primary">{junction.currentGreen}</p>
+                          </div>
+
+                          <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${getCongestionStyle(junction.congestionLevel)}`}>
+                            {junction.congestionLevel} Congestion
+                          </div>
+                        </div>
+                        <TrafficSignal countdown={junction.countdown} />
+                      </div>
+                   </div>
+                 ))}
+               </div>
+            )}
+        </div>
+      )}
     </div>
   );
 };

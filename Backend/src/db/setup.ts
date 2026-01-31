@@ -7,7 +7,11 @@ const createTables = async () => {
       name VARCHAR(100) NOT NULL,
       email VARCHAR(100) UNIQUE NOT NULL,
       password VARCHAR(255) NOT NULL,
-      role VARCHAR(50) DEFAULT 'public',
+      role VARCHAR(50) DEFAULT 'user',
+      location VARCHAR(255),
+      phone VARCHAR(20),
+      vehicle_number VARCHAR(20),
+
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
   `;
@@ -127,6 +131,78 @@ const createTables = async () => {
       `;
       await pool.query(seedTNSignals);
       console.log('✅ Seeded Additional Tamil Nadu traffic signals data');
+    }
+
+    // Seed Chennai Metropolitan Area - Mostly LOW and MEDIUM Traffic
+    const chennaiMetroCheck = await pool.query("SELECT COUNT(*) FROM traffic_signals WHERE location = 'Besant Nagar Signal'");
+    if (parseInt(chennaiMetroCheck.rows[0].count) === 0) {
+      const seedChennaiMetro = `
+        INSERT INTO traffic_signals (location, congestion_level, current_green, countdown, latitude, longitude) VALUES
+        ('Besant Nagar Signal', 'LOW', 'North', 25, 13.0001, 80.2668),
+        ('Nungambakkam High Road', 'MEDIUM', 'East', 35, 13.0569, 80.2426),
+        ('Mylapore Tank Junction', 'LOW', 'South', 20, 13.0339, 80.2619),
+        ('Alwarpet Signal', 'LOW', 'West', 30, 13.0338, 80.2501),
+        ('Saidapet Signal', 'MEDIUM', 'North', 40, 13.0210, 80.2231),
+        ('Ashok Nagar Junction', 'LOW', 'East', 25, 13.0358, 80.2095),
+        ('KK Nagar Signal', 'LOW', 'South', 30, 13.0383, 80.2006),
+        ('Nandanam Signal', 'MEDIUM', 'West', 35, 13.0297, 80.2426),
+        ('Teynampet Signal', 'LOW', 'North', 25, 13.0418, 80.2532),
+        ('Egmore Junction', 'MEDIUM', 'East', 40, 13.0732, 80.2609),
+        ('Chetpet Signal', 'LOW', 'South', 20, 13.0708, 80.2425),
+        ('Kilpauk Signal', 'LOW', 'West', 30, 13.0808, 80.2421),
+        ('Aminjikarai Signal', 'LOW', 'North', 25, 13.0708, 80.2191),
+        ('Shenoy Nagar Signal', 'MEDIUM', 'East', 35, 13.0808, 80.2267),
+        ('Perambur Signal', 'LOW', 'South', 30, 13.1127, 80.2394),
+        ('Vyasarpadi Signal', 'LOW', 'West', 25, 13.0986, 80.2558),
+        ('Tondiarpet Junction', 'MEDIUM', 'North', 40, 13.1167, 80.2833),
+        ('Royapuram Signal', 'LOW', 'East', 20, 13.1119, 80.2953),
+        ('Washermanpet Signal', 'LOW', 'South', 30, 13.1025, 80.2786),
+        ('Madhavaram Junction', 'MEDIUM', 'West', 35, 13.1482, 80.2314),
+        ('Ambattur Signal', 'MEDIUM', 'North', 40, 13.1143, 80.1548),
+        ('Avadi Junction', 'LOW', 'East', 25, 13.1147, 80.1018),
+        ('Pattabiram Signal', 'LOW', 'South', 30, 13.1333, 80.0833),
+        ('Thiruverkadu Signal', 'LOW', 'West', 20, 13.0667, 80.1500),
+        ('Maduravoyal Junction', 'MEDIUM', 'North', 35, 13.0333, 80.1667),
+        ('Mangadu Signal', 'LOW', 'East', 25, 13.0333, 80.1000),
+        ('Kundrathur Signal', 'LOW', 'South', 30, 13.0000, 80.0833),
+        ('Pallavaram Signal', 'MEDIUM', 'West', 40, 12.9675, 80.1491),
+        ('Chrompet Junction', 'MEDIUM', 'North', 35, 12.9516, 80.1462),
+        ('Pammal Signal', 'LOW', 'East', 25, 12.9761, 80.1275),
+        ('Anakaputhur Signal', 'LOW', 'South', 20, 12.9833, 80.1167),
+        ('Meenambakkam Signal', 'LOW', 'West', 30, 12.9833, 80.1667),
+        ('Tirusulam Signal', 'LOW', 'North', 25, 12.9667, 80.1333),
+        ('Palavanthangal Signal', 'LOW', 'East', 20, 13.0000, 80.1500),
+        ('Nanganallur Signal', 'MEDIUM', 'South', 35, 13.0000, 80.1833),
+        ('Alandur Junction', 'MEDIUM', 'West', 40, 13.0025, 80.2061),
+        ('St Thomas Mount Signal', 'LOW', 'North', 25, 13.0067, 80.1983);
+      `;
+      await pool.query(seedChennaiMetro);
+      console.log('✅ Seeded Chennai Metropolitan Area traffic signals (LOW/MEDIUM focus)');
+    }
+
+    // Seed More Medium Traffic Signals in Chennai and neighboring districts
+    const mediumSignalsCheck = await pool.query("SELECT COUNT(*) FROM traffic_signals WHERE location = 'Kelambakkam Junction'");
+    if (parseInt(mediumSignalsCheck.rows[0].count) === 0) {
+      const seedMediumSignals = `
+        INSERT INTO traffic_signals (location, congestion_level, current_green, countdown, latitude, longitude) VALUES
+        ('Kelambakkam Junction', 'MEDIUM', 'North', 35, 12.7850, 80.2201),
+        ('Navalur OMR Junction', 'MEDIUM', 'East', 40, 12.8450, 80.2250),
+        ('Sholinganallur Junction', 'MEDIUM', 'South', 45, 12.9010, 80.2269),
+        ('Medavakkam Signal', 'MEDIUM', 'West', 35, 12.9200, 80.1900),
+        ('Camp Road Junction', 'MEDIUM', 'North', 40, 12.9100, 80.1400),
+        ('Perungalathur Signal', 'MEDIUM', 'East', 50, 12.9051, 80.0917),
+        ('Urapakkam Junction', 'MEDIUM', 'South', 30, 12.8682, 80.0716),
+        ('Guduvanchery Signal', 'MEDIUM', 'West', 35, 12.8454, 80.0617),
+        ('Maraimalai Nagar Junction', 'MEDIUM', 'North', 40, 12.7917, 80.0217),
+        ('Red Hills Junction', 'MEDIUM', 'East', 35, 13.1833, 80.1667),
+        ('Manali High Road Signal', 'MEDIUM', 'South', 30, 13.1667, 80.2667),
+        ('Kattupalli Road Signal', 'MEDIUM', 'West', 25, 13.3167, 80.3333),
+        ('Sriperumbudur Junction', 'MEDIUM', 'North', 40, 12.9734, 79.9482),
+        ('Oragadam Junction', 'MEDIUM', 'East', 45, 12.8333, 79.9500),
+        ('Kanchipuram Moongil Mandapam', 'MEDIUM', 'South', 35, 12.8387, 79.7016);
+      `;
+      await pool.query(seedMediumSignals);
+      console.log('✅ Seeded more medium-traffic signals in outskirts');
     }
 
     await pool.query(violationsTable);

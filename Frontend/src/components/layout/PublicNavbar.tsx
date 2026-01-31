@@ -12,6 +12,7 @@ import {
   Activity
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useMapContext } from '@/contexts/MapContext';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { Button } from '@/components/ui/button';
 
@@ -26,6 +27,7 @@ const navItems = [
 
 export const PublicNavbar: React.FC = () => {
   const { logout, user } = useAuth();
+  const { resetMap } = useMapContext();
   const location = useLocation();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
@@ -71,7 +73,10 @@ export const PublicNavbar: React.FC = () => {
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={logout}
+                onClick={() => {
+                  resetMap();
+                  logout();
+                }}
                 className="text-muted-foreground hover:text-destructive"
               >
                 <LogOut className="w-4 h-4" />
@@ -111,7 +116,10 @@ export const PublicNavbar: React.FC = () => {
               ))}
               <Button
                 variant="ghost"
-                onClick={logout}
+                onClick={() => {
+                  resetMap();
+                  logout();
+                }}
                 className="justify-start gap-3 px-4 py-3 text-destructive hover:text-destructive"
               >
                 <LogOut className="w-5 h-5" />
