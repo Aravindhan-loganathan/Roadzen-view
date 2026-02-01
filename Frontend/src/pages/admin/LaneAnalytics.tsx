@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Download, Filter, Clock } from 'lucide-react';
+import { Download, Filter, Clock, MapPin } from 'lucide-react';
+import { exportLaneAnalyticsToPdf } from '@/services/dashboardPdfExportService';
 import { laneData } from '@/data/mockData';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -16,6 +17,19 @@ import {
 
 export const LaneAnalytics: React.FC = () => {
   const [timeFilter, setTimeFilter] = useState('today');
+
+  // Get unique junctions
+  const uniqueJunctions = Array.from(new Set(laneData.map(item => item.junction)));
+  const [selectedJunction, setSelectedJunction] = useState(uniqueJunctions[0]);
+
+  const filteredLanes = laneData.filter(l => l.junction === selectedJunction);
+
+  // Calculate stats for filtered data
+  const totalVehicles = filteredLanes.reduce((sum, lane) => sum + lane.vehicles, 0);
+  const avgDensity = Math.round(filteredLanes.reduce((sum, lane) => sum + lane.density, 0) / (filteredLanes.length || 1));
+
+  const mostCongested = [...filteredLanes].sort((a, b) => b.density - a.density)[0];
+  const leastTraffic = [...filteredLanes].sort((a, b) => a.vehicles - b.vehicles)[0];
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -47,7 +61,19 @@ export const LaneAnalytics: React.FC = () => {
           <h1 className="text-2xl md:text-3xl font-display font-bold">Lane Analytics</h1>
           <p className="text-muted-foreground mt-1">Detailed lane-wise traffic analysis</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+          <Select value={selectedJunction} onValueChange={setSelectedJunction}>
+            <SelectTrigger className="w-[180px]">
+              <MapPin className="w-4 h-4 mr-2" />
+              <SelectValue placeholder="Select Junction" />
+            </SelectTrigger>
+            <SelectContent>
+              {uniqueJunctions.map(junction => (
+                <SelectItem key={junction} value={junction}>{junction}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
           <Select value={timeFilter} onValueChange={setTimeFilter}>
             <SelectTrigger className="w-[140px]">
               <Clock className="w-4 h-4 mr-2" />
@@ -59,7 +85,7 @@ export const LaneAnalytics: React.FC = () => {
               <SelectItem value="month">This Month</SelectItem>
             </SelectContent>
           </Select>
-          <Button variant="outline" className="gap-2">
+          <Button variant="outline" className="gap-2" onClick={() => exportLaneAnalyticsToPdf(filteredLanes)}>
             <Download className="w-4 h-4" />
             Export
           </Button>
@@ -86,7 +112,7 @@ export const LaneAnalytics: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {laneData.map((lane) => (
+                {filteredLanes.map((lane) => (
                   <tr key={lane.id} className="border-t border-border hover:bg-muted/20 transition-colors">
                     <td className="p-4 font-medium">{lane.lane}</td>
                     <td className="p-4 text-right font-mono">{lane.vehicles.toLocaleString()}</td>
@@ -120,13 +146,13 @@ export const LaneAnalytics: React.FC = () => {
         <div className="glow-card p-6">
           <h3 className="font-semibold mb-6">Density Distribution</h3>
           <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={laneData}>
+            <BarChart data={filteredLanes}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
               <XAxis
                 dataKey="lane"
                 stroke="hsl(var(--muted-foreground))"
                 fontSize={11}
-                tickFormatter={(value) => value.split(' - ')[1]}
+                tickFormatter={(value) => value}
               />
               <YAxis
                 stroke="hsl(var(--muted-foreground))"
@@ -143,7 +169,7 @@ export const LaneAnalytics: React.FC = () => {
                 formatter={(value) => [`${value}%`, 'Density']}
               />
               <Bar dataKey="density" radius={[4, 4, 0, 0]}>
-                {laneData.map((entry, index) => (
+                {filteredLanes.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={getStatusColor(entry.status)} />
                 ))}
               </Bar>
@@ -157,24 +183,28 @@ export const LaneAnalytics: React.FC = () => {
         <div className="glow-card p-4">
           <p className="text-sm text-muted-foreground">Total Vehicles</p>
           <p className="text-2xl font-display font-bold mt-1">
-            {laneData.reduce((sum, lane) => sum + lane.vehicles, 0).toLocaleString()}
+            {totalVehicles.toLocaleString()}
           </p>
         </div>
         <div className="glow-card p-4">
           <p className="text-sm text-muted-foreground">Avg. Density</p>
           <p className="text-2xl font-display font-bold mt-1">
-            {Math.round(laneData.reduce((sum, lane) => sum + lane.density, 0) / laneData.length)}%
+            {avgDensity}%
           </p>
         </div>
         <div className="glow-card p-4">
           <p className="text-sm text-muted-foreground">Most Congested</p>
-          <p className="text-2xl font-display font-bold mt-1 text-destructive">Lane 1</p>
+          <p className="text-2xl font-display font-bold mt-1 text-destructive">
+            {mostCongested?.lane || '-'}
+          </p>
         </div>
         <div className="glow-card p-4">
           <p className="text-sm text-muted-foreground">Least Traffic</p>
-          <p className="text-2xl font-display font-bold mt-1 text-success">Lane 3</p>
+          <p className="text-2xl font-display font-bold mt-1 text-success">
+            {leastTraffic?.lane || '-'}
+          </p>
         </div>
       </div>
-    </div>
+    </div >
   );
 };

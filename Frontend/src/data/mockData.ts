@@ -102,6 +102,12 @@ export const laneData = [
   { id: 302, junction: 'Whitefield', lane: 'South Bound', vehicles: 1180, density: 25, status: 'low' },
   { id: 303, junction: 'Whitefield', lane: 'East Bound', vehicles: 2890, density: 68, status: 'high' },
   { id: 304, junction: 'Whitefield', lane: 'West Bound', vehicles: 2260, density: 55, status: 'medium' },
+
+  // Koramangala Junction
+  { id: 401, junction: 'Koramangala', lane: 'North Bound', vehicles: 2940, density: 65, status: 'high' },
+  { id: 402, junction: 'Koramangala', lane: 'South Bound', vehicles: 1580, density: 30, status: 'low' },
+  { id: 403, junction: 'Koramangala', lane: 'East Bound', vehicles: 3120, density: 82, status: 'high' },
+  { id: 404, junction: 'Koramangala', lane: 'West Bound', vehicles: 1950, density: 45, status: 'medium' },
 ];
 
 // Signal Performance Data

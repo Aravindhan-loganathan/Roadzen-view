@@ -344,3 +344,181 @@ export const exportSignalPerformanceToPdf = async () => {
     };
   }
 };
+
+export const exportLaneAnalyticsToPdf = async (junctionWithLanes: any[]) => {
+  const junctionName = junctionWithLanes.length > 0 ? junctionWithLanes[0].junction : 'Unknown';
+  const fileName = `Lane_Analytics_${junctionName.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
+
+  try {
+    const pdfContainer = document.createElement('div');
+
+    const tableRows = junctionWithLanes.map(lane => {
+      let statusBg = '#dcfce7'; // green-100
+      let statusColor = '#166534'; // green-800
+
+      if (lane.status === 'medium') {
+        statusBg = '#fef9c3'; // yellow-100
+        statusColor = '#854d0e'; // yellow-800
+      } else if (lane.status === 'high') {
+        statusBg = '#fee2e2'; // red-100
+        statusColor = '#991b1b'; // red-800
+      }
+
+      return `
+        <tr style="border-bottom: 1px solid #e2e8f0;">
+          <td style="padding:6px 8px; font-weight:500; color:#334155; font-size: 11px;">${lane.lane}</td>
+          <td style="padding:6px 8px; color:#334155; text-align: right; font-family: monospace; font-size: 11px;">${lane.vehicles.toLocaleString()}</td>
+          <td style="padding:6px 8px; color:#334155; text-align: right; font-size: 11px;">${lane.density}%</td>
+          <td style="padding:6px 8px; text-align: center;">
+            <span style="background: ${statusBg}; color: ${statusColor}; padding: 2px 6px; border-radius: 10px; font-size: 8px; font-weight: bold; text-transform: uppercase;">${lane.status}</span>
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+    // Calculate aggregated stats
+    const totalVehicles = junctionWithLanes.reduce((sum: number, lane: any) => sum + lane.vehicles, 0);
+    const avgDensity = Math.round(junctionWithLanes.reduce((sum: number, lane: any) => sum + lane.density, 0) / (junctionWithLanes.length || 1));
+    const mostCongested = [...junctionWithLanes].sort((a, b) => b.density - a.density)[0];
+
+    // Generate Charts HTML
+    const barsHtml = junctionWithLanes.map(lane => {
+      const height = lane.density; // Density is already percentage (0-100)
+      let color = '#10b981'; // traffic-green (hsl(142, 71%, 45%))
+      // Match the dashboard logic exactly
+      if (lane.status === 'medium') color = '#f59e0b'; // traffic-yellow (hsl(38, 92%, 50%))
+      if (lane.status === 'high') color = '#ef4444'; // traffic-red (hsl(0, 72%, 51%))
+
+      return `
+        <div style="display:flex; flex-direction:column; align-items:center; width: 24%; position: relative;">
+          <div style="font-size:10px; font-weight:700; color:#1e293b; margin-bottom: 8px;">${lane.density}%</div>
+          <div style="width:100%; height:140px; display:flex; align-items:flex-end; justify-content:center; background:hsl(210, 20%, 98%); border-radius:4px 4px 0 0; overflow:hidden; border: 1px solid #e2e8f0; position: relative;">
+            <div style="width:70%; height:${height}%; background-color:${color}; border-radius: 4px 4px 0 0; box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);"></div>
+          </div>
+          <div style="font-size:9px; color:#64748b; margin-top:8px; text-align:center; line-height: 1.2; font-weight: 600;">${lane.lane.replace(' Bound', '')}</div>
+        </div>
+      `;
+    }).join('');
+
+    pdfContainer.innerHTML = `
+    <meta charset="UTF-8">
+    <div style="font-family: 'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif; background:#f8fafc; padding:25px; width:100%; box-sizing: border-box;">
+      
+      <!-- PAGE BORDER -->
+      <div style="border: 1px solid #e2e8f0; background: #f8fafc; padding: 20px; position: relative; min-height: 100%;">
+
+        <!-- HEADER -->
+        <div style="border-bottom: 2px solid #334155; padding-bottom: 12px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: flex-end;">
+          <div>
+            <h1 style="margin:0; color:#0f172a; font-size: 22px; text-transform: uppercase; letter-spacing: 1px;">Lane Analytics</h1>
+            <p style="color:#64748b; margin:3px 0 0 0; font-size: 12px;">Junction: <span style="color:#0f172a; font-weight:bold">${junctionName}</span></p>
+          </div>
+          <div style="text-align: right;">
+             <p style="font-size:10px; color:#94a3b8; margin: 0;">REPORT ID: #${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}</p>
+            <p style="font-size:10px; color:#0f172a; font-weight: bold; margin: 3px 0 0 0;">${new Date().toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' })}</p>
+          </div>
+        </div>
+
+        <!-- SUMMARY CARDS -->
+        <h3 style="color:#334155; border-left: 3px solid #3b82f6; padding-left: 8px; margin: 0 0 12px 0; font-size: 13px;">Overview</h3>
+        <div style="display:flex; gap:10px; margin-bottom:15px; justify-content:space-between;">
+          <div style="flex:1; border:1px solid #e2e8f0; padding:12px; border-radius:6px; background-color:#ffffff; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+            <p style="color:#64748b; font-size:9px; text-transform: uppercase; letter-spacing: 0.5px; margin:0 0 6px 0;">Total Volume</p>
+            <h2 style="margin:0; font-size:20px; color:#0f172a; font-weight: 800;">${totalVehicles.toLocaleString()}</h2>
+          </div>
+          <div style="flex:1; border:1px solid #e2e8f0; padding:12px; border-radius:6px; background-color:#ffffff; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+            <p style="color:#64748b; font-size:9px; text-transform: uppercase; letter-spacing: 0.5px; margin:0 0 6px 0;">Avg Density</p>
+            <h2 style="margin:0; font-size:20px; color:#0f172a; font-weight: 800;">${avgDensity}%</h2>
+          </div>
+          <div style="flex:1; border:1px solid #fee2e2; padding:12px; border-radius:6px; background-color:#fef2f2; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+            <p style="color:#b91c1c; font-size:9px; text-transform: uppercase; letter-spacing: 0.5px; margin:0 0 6px 0;">Peak Lane</p>
+            <h2 style="margin:0; font-size:18px; color:#dc2626; font-weight: 800;">${mostCongested?.lane || 'N/A'}</h2>
+          </div>
+        </div>
+
+        <!-- DENSITY CHART -->
+        <div style="margin-top: 25px; margin-bottom: 20px;">
+          <h3 style="color:#0f172a; border-left: 4px solid #3b82f6; padding-left: 10px; margin: 0 0 15px 0; font-size: 14px; font-weight: 700;">Density Distribution</h3>
+          <div style="border:1px solid #e2e8f0; padding:30px 30px 35px 50px; border-radius:8px; background: #ffffff; position: relative; box-shadow: 0 2px 10px rgba(0,0,0,0.03);">
+            <div style="display:flex; justify-content:space-between; align-items:flex-end; height:150px; border-bottom:2px solid #cbd5e1; border-left:2px solid #cbd5e1; padding: 0 10px 0 5px;">
+              ${barsHtml}
+            </div>
+            
+            <!-- X-Axis Label -->
+            <div style="text-align:center; margin-top:15px; font-size:10px; font-weight:700; color:#64748b; text-transform: uppercase; letter-spacing: 1px;">Detected Lanes</div>
+            
+            <!-- Y-Axis Label -->
+            <div style="position:absolute; left:-35px; top:110px; width: 150px; text-align: center; transform: rotate(-90deg); font-size:9px; font-weight:700; color:#64748b; text-transform: uppercase; letter-spacing: 1px; white-space: nowrap;">Density Percentage (%)</div>
+          </div>
+        </div>
+
+
+
+        <!-- ANALYTICS TABLE -->
+        <div style="margin-bottom:15px;">
+          <h3 style="color:#334155; border-left: 3px solid #3b82f6; padding-left: 8px; margin: 0 0 10px 0; font-size: 13px;">Lane Breakdown</h3>
+          <table style="width:100%; border-collapse:collapse; font-size:11px; border: 1px solid #cbd5e1;">
+            <thead>
+              <tr style="background-color:#f1f5f9; text-align:left; border-bottom: 2px solid #cbd5e1;">
+                <th style="padding:6px 8px; color:#334155; font-weight:700; text-transform: uppercase; font-size: 9px;">Lane Direction</th>
+                <th style="padding:6px 8px; color:#334155; font-weight:700; text-transform: uppercase; font-size: 9px; text-align: right;">Vehicle Count</th>
+                <th style="padding:6px 8px; color:#334155; font-weight:700; text-transform: uppercase; font-size: 9px; text-align: right;">Density</th>
+                <th style="padding:6px 8px; color:#334155; font-weight:700; text-transform: uppercase; font-size: 9px; text-align: center;">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${tableRows}
+            </tbody>
+          </table>
+        </div>
+
+        <!-- FOOTER INFO -->
+        <div style="margin-top: 12px; padding-top: 10px; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center;">
+          <div style="font-size: 8px; color: #94a3b8;">
+            Generated by Smart Traffic Monitoring System • Confidential
+          </div>
+          <div style="font-size: 8px; color: #94a3b8; text-align: right;">
+             Page 1 of 1
+          </div>
+        </div>
+
+      </div>
+    </div>
+    `;
+
+    document.body.appendChild(pdfContainer);
+
+    const options = {
+      margin: 10,
+      filename: fileName,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: {
+        scale: 2,
+        backgroundColor: '#ffffff',
+        useCORS: true,
+        logging: false
+      },
+      jsPDF: {
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4'
+      }
+    };
+
+    await html2pdf().set(options).from(pdfContainer).save();
+
+    document.body.removeChild(pdfContainer);
+
+    return {
+      fileName,
+      fileType: 'PDF'
+    };
+
+  } catch (error) {
+    console.error('Lane Analytics PDF Export Error:', error);
+    return {
+      fileName: 'error_log.txt',
+      fileType: 'TXT'
+    };
+  }
+};
