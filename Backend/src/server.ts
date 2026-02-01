@@ -10,6 +10,9 @@ import createTables from './db/setup';
 import reportRoutes from './routes/reportRoutes';
 import violationRoutes from './routes/violationRoutes';
 import savedLocations from './routes/savedLocations';
+import emergencyVehicleRoutes from './routes/emergencyVehicleRoutes';
+import roadBlocksRoutes from './routes/roadBlocksRoutes';
+
 
 // Load environment variables
 dotenv.config();
@@ -40,7 +43,9 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/alerts', alertRoutes);
 app.use('/api', reportRoutes);
 app.use('/api', violationRoutes);
+app.use('/api', emergencyVehicleRoutes);
 app.use('/api/saved-locations', savedLocations);
+app.use('/api', roadBlocksRoutes);
 
 // Basic Route
 app.get('/', (req: Request, res: Response) => {
