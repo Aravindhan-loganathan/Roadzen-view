@@ -29,6 +29,7 @@ import { SettingsPage } from "@/pages/admin/SettingsPage";
 import NotFound from "@/pages/NotFound";
 import { ReportIssuePage } from "@/pages/public/ReportIssuePage";
 import { UserManagement } from "@/pages/admin/UserManagement";
+import { AdminTrafficMap } from "@/pages/admin/AdminTrafficMap";
 
 const queryClient = new QueryClient();
 
@@ -80,6 +81,8 @@ const App = () => (
                 <Route path="reports" element={<Reports />} />
                 <Route path="settings" element={<SettingsPage />} />
                 <Route path="users" element={<UserManagement />} />
+                <Route path="/admin/traffic-map" element={<AdminTrafficMap />} />
+
               </Route>
 
               {/* 404 */}

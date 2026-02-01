@@ -29,6 +29,7 @@ const navItems = [
   { label: 'Reports', path: '/admin/reports', icon: FileText },
   { label: 'Settings', path: '/admin/settings', icon: Settings },
   { label: 'User Management', path: '/admin/users', icon: UserRound },
+  { label: 'Traffic Map', path: '/admin/traffic-map', icon: Activity },
 ];
 
 export const AdminSidebar: React.FC = () => {
