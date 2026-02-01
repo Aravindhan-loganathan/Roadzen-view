@@ -38,13 +38,14 @@ export const authMiddleware = (
  * Middleware to restrict access to admin users only
  * MUST be used after authMiddleware
  */
-export const adminOnly = (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
-  if (!req.user || req.user.role !== 'admin') {
-    return res.status(403).json({ message: 'Forbidden: Admin access required' });
+export const adminOnly = (req: Request, res: Response, next: NextFunction) => {
+  if (!req.user) {
+    return res.status(401).json({ message: 'Unauthorized: No user session found' });
   }
+
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ message: 'Access Denied: Admin privileges required' });
+  }
+
   next();
 };
