@@ -18,16 +18,25 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Middleware
-app.use(cors());
+app.use(cors({ origin: true, methods: ['GET','POST','PUT','DELETE','OPTIONS'], allowedHeaders: ['Content-Type', 'Authorization'] }));
+// Handle preflight requests globally via middleware (avoids route pattern parser issues)
+app.use((req, res, next) => {
+  if (req.method === 'OPTIONS') {
+    res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    return res.sendStatus(204);
+  }
+  next();
+});
 app.use(express.json());
 
 // Initialize Database Tables
 createTables();
 
 // Routes
+app.use('/api', signalRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/dashboard', dashboardRoutes);
-app.use('/api/signals', signalRoutes);
 app.use('/api/alerts', alertRoutes);
 app.use('/api', reportRoutes);
 app.use('/api', violationRoutes);
@@ -58,6 +67,6 @@ app.get('/api/test-db', async (req: Request, res: Response) => {
 });
 
 // Start Server
-app.listen(3000, '0.0.0.0', () => {
+app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
 });
