@@ -83,11 +83,25 @@ export const vehicleDetection = {
 };
 
 // Lane Analytics Data
+// Lane Analytics Data
 export const laneData = [
-  { id: 1, lane: 'Lane 1 - North', vehicles: 3240, density: 72, status: 'high' },
-  { id: 2, lane: 'Lane 2 - South', vehicles: 2180, density: 45, status: 'medium' },
-  { id: 3, lane: 'Lane 3 - East', vehicles: 1890, density: 38, status: 'low' },
-  { id: 4, lane: 'Lane 4 - West', vehicles: 2560, density: 58, status: 'medium' },
+  // MG Road Junction
+  { id: 101, junction: 'MG Road', lane: 'North Bound', vehicles: 3240, density: 72, status: 'high' },
+  { id: 102, junction: 'MG Road', lane: 'South Bound', vehicles: 2180, density: 45, status: 'medium' },
+  { id: 103, junction: 'MG Road', lane: 'East Bound', vehicles: 1890, density: 38, status: 'low' },
+  { id: 104, junction: 'MG Road', lane: 'West Bound', vehicles: 2560, density: 58, status: 'medium' },
+
+  // Indiranagar Junction
+  { id: 201, junction: 'Indiranagar', lane: 'North Bound', vehicles: 1540, density: 42, status: 'medium' },
+  { id: 202, junction: 'Indiranagar', lane: 'South Bound', vehicles: 1280, density: 35, status: 'low' },
+  { id: 203, junction: 'Indiranagar', lane: 'East Bound', vehicles: 3890, density: 88, status: 'high' },
+  { id: 204, junction: 'Indiranagar', lane: 'West Bound', vehicles: 3160, density: 78, status: 'high' },
+
+  // Whitefield Junction
+  { id: 301, junction: 'Whitefield', lane: 'North Bound', vehicles: 940, density: 22, status: 'low' },
+  { id: 302, junction: 'Whitefield', lane: 'South Bound', vehicles: 1180, density: 25, status: 'low' },
+  { id: 303, junction: 'Whitefield', lane: 'East Bound', vehicles: 2890, density: 68, status: 'high' },
+  { id: 304, junction: 'Whitefield', lane: 'West Bound', vehicles: 2260, density: 55, status: 'medium' },
 ];
 
 // Signal Performance Data

@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { fetchAdminReports, markReportAsHandled, markReportAsCompleted, deleteReport } from '@/services/reportApi';
 import { getViolations } from '@/services/violationApi';
-import { exportViolationsToExcel } from '@/services/excelExportService';
-import { exportDashboardToPdf } from '@/services/dashboardPdfExportService';
+import { exportViolationsToExcel, exportLaneAnalyticsToExcel } from '@/services/excelExportService';
+import { exportDashboardToPdf, exportSignalPerformanceToPdf } from '@/services/dashboardPdfExportService';
+import { laneData } from '@/data/mockData';
 
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -51,6 +52,7 @@ interface DownloadedReport {
 interface UserReport {
   id: number;
   name?: string;
+  username?: string;
   type: string;
   severity: 'low' | 'medium' | 'high' | 'critical';
   description: string;
@@ -63,7 +65,7 @@ export const Reports: React.FC = () => {
   const [userReports, setUserReports] = useState<UserReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [handlingReportId, setHandlingReportId] = useState<number | null>(null); 
+  const [handlingReportId, setHandlingReportId] = useState<number | null>(null);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [search, setSearch] = useState('');
@@ -71,6 +73,7 @@ export const Reports: React.FC = () => {
   const [order, setOrder] = useState('DESC');
   const [isDownloadingViolations, setIsDownloadingViolations] = useState(false);
   const [isDownloadingDashboard, setIsDownloadingDashboard] = useState(false);
+  const [isDownloadingSignals, setIsDownloadingSignals] = useState(false);
   const [recentDownloads, setRecentDownloads] = useState<DownloadedReport[]>([]);
   const [totalDownloads, setTotalDownloads] = useState(0);
   const { toast } = useToast();
@@ -115,11 +118,11 @@ export const Reports: React.FC = () => {
     // Add to beginning of array and keep only last 5
     const updated = [newDownload, ...recentDownloads].slice(0, 5);
     setRecentDownloads(updated);
-    
+
     // Increment total downloads
     const newTotal = totalDownloads + 1;
     setTotalDownloads(newTotal);
-    
+
     // Save to localStorage
     localStorage.setItem('recentDownloads', JSON.stringify(updated));
     localStorage.setItem('totalDownloads', newTotal.toString());
@@ -129,7 +132,7 @@ export const Reports: React.FC = () => {
     try {
       if (!isBackground) setLoading(true);
       const data = await fetchAdminReports(page, 5, search, sortBy, order);
-      
+
       if (Array.isArray(data)) {
         setUserReports(data);
         setTotalPages(1);
@@ -204,7 +207,7 @@ export const Reports: React.FC = () => {
         description: 'Report marked as handling',
         variant: 'default',
       });
-      } catch (err) {
+    } catch (err) {
       toast({
         title: 'Error',
         description: err instanceof Error ? err.message : 'Failed to update report',
@@ -225,7 +228,7 @@ export const Reports: React.FC = () => {
         description: 'Report marked as completed',
         variant: 'default',
       });
-      } catch (err) {
+    } catch (err) {
       toast({
         title: 'Error',
         description: err instanceof Error ? err.message : 'Failed to update report',
@@ -241,7 +244,7 @@ export const Reports: React.FC = () => {
     try {
       const response = await getViolations();
       const violations = response.violations || [];
-      
+
       if (violations.length === 0) {
         toast({
           title: 'Info',
@@ -252,10 +255,10 @@ export const Reports: React.FC = () => {
       }
 
       const result = await exportViolationsToExcel(violations);
-      
+
       // Track the download
       addRecentDownload(result.fileName, result.fileType);
-      
+
       toast({
         title: 'Success',
         description: `Downloaded ${violations.length} violations to Excel`,
@@ -275,11 +278,19 @@ export const Reports: React.FC = () => {
   const handleDownloadDashboardPdf = async () => {
     setIsDownloadingDashboard(true);
     try {
-      const result = await exportDashboardToPdf();
-      
+      // Calculate real stats from userReports
+      const stats = {
+        totalReports: userReports.length || 0,
+        criticalIssues: userReports.filter(r => r.severity === 'critical').length || 0,
+        pendingReports: userReports.filter(r => r.status === 'pending').length || 0,
+        completedReports: userReports.filter(r => r.status === 'completed').length || 0
+      };
+
+      const result = await exportDashboardToPdf(stats);
+
       // Track the download
       addRecentDownload(result.fileName, result.fileType);
-      
+
       toast({
         title: 'Success',
         description: 'Dashboard downloaded as PDF successfully',
@@ -335,7 +346,7 @@ trailer
 startxref
 395
 %%EOF`;
-      
+
       const blob = new Blob([pdfContent], { type: 'application/pdf' });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -349,7 +360,7 @@ startxref
       // Create a simple Excel file
       const csvContent = `Report,Date,Value
 ${fileName},${new Date().toISOString().split('T')[0]},Sample Data`;
-      
+
       const blob = new Blob([csvContent], { type: 'application/vnd.ms-excel' });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -362,15 +373,28 @@ ${fileName},${new Date().toISOString().split('T')[0]},Sample Data`;
     }
   };
 
-  const handleSignalPerformanceDownload = () => {
-    const fileName = `Signal_Performance_${new Date().toISOString().split('T')[0]}.pdf`;
-    downloadTestFile(fileName, 'pdf');
-    addRecentDownload(fileName, 'PDF');
-    toast({
-      title: 'Success',
-      description: 'Signal Performance report downloaded',
-      variant: 'default',
-    });
+  const handleSignalPerformanceDownload = async () => {
+    setIsDownloadingSignals(true);
+    try {
+      const result = await exportSignalPerformanceToPdf();
+
+      // Track the download
+      addRecentDownload(result.fileName, result.fileType);
+
+      toast({
+        title: 'Success',
+        description: 'Signal Performance report downloaded',
+        variant: 'default',
+      });
+    } catch (err) {
+      toast({
+        title: 'Error',
+        description: err instanceof Error ? err.message : 'Failed to download signal report',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsDownloadingSignals(false);
+    }
   };
 
   const handleEmergencyResponseDownload = () => {
@@ -384,15 +408,27 @@ ${fileName},${new Date().toISOString().split('T')[0]},Sample Data`;
     });
   };
 
-  const handleLaneAnalyticsDownload = () => {
-    const fileName = `Lane_Analytics_${new Date().toISOString().split('T')[0]}.xlsx`;
-    downloadTestFile(fileName, 'excel');
-    addRecentDownload(fileName, 'Excel');
-    toast({
-      title: 'Success',
-      description: 'Lane Analytics report downloaded',
-      variant: 'default',
-    });
+  const handleLaneAnalyticsDownload = async () => {
+    try {
+      // Import laneData dynamically or ensure it is available
+      // Using the imported service now
+      const result = await exportLaneAnalyticsToExcel(laneData);
+
+      // Track the download
+      addRecentDownload(result.fileName, result.fileType);
+
+      toast({
+        title: 'Success',
+        description: 'Lane Analytics report downloaded as Excel',
+        variant: 'default',
+      });
+    } catch (err) {
+      toast({
+        title: 'Error',
+        description: err instanceof Error ? err.message : 'Failed to download Lane Analytics',
+        variant: 'destructive',
+      });
+    }
   };
 
   return (
@@ -418,7 +454,7 @@ ${fileName},${new Date().toISOString().split('T')[0]},Sample Data`;
           <p className="text-muted-foreground">Loading reports...</p>
         </div>
       )}
-      
+
       {/* Main Content - Show if we have data or if loading is finished (allowing for empty state) */}
       {(userReports.length > 0 || !loading) && (
         <>
@@ -453,9 +489,9 @@ ${fileName},${new Date().toISOString().split('T')[0]},Sample Data`;
                     <p className="font-medium">{r.name}</p>
                     <p className="text-sm text-muted-foreground">{r.description}</p>
                   </div>
-                  <Button 
-                    size="sm" 
-                    variant="outline" 
+                  <Button
+                    size="sm"
+                    variant="outline"
                     className="gap-2"
                     onClick={() => {
                       if (r.id === 1) {
@@ -475,11 +511,17 @@ ${fileName},${new Date().toISOString().split('T')[0]},Sample Data`;
                         handleLaneAnalyticsDownload();
                       }
                     }}
-                    disabled={(r.id === 1 && isDownloadingDashboard) || (r.id === 2 && isDownloadingViolations)}
+                    disabled={
+                      (r.id === 1 && isDownloadingDashboard) ||
+                      (r.id === 2 && isDownloadingViolations) ||
+                      (r.id === 3 && isDownloadingSignals)
+                    }
                   >
                     {r.id === 1 && isDownloadingDashboard ? (
                       <Loader className="w-4 h-4 animate-spin" />
                     ) : r.id === 2 && isDownloadingViolations ? (
+                      <Loader className="w-4 h-4 animate-spin" />
+                    ) : r.id === 3 && isDownloadingSignals ? (
                       <Loader className="w-4 h-4 animate-spin" />
                     ) : (
                       <Download className="w-4 h-4" />
@@ -525,7 +567,7 @@ ${fileName},${new Date().toISOString().split('T')[0]},Sample Data`;
                 <AlertTriangle className="w-5 h-5 text-warning" />
                 User Reported Issues
               </h3>
-              
+
               <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
                 <div className="relative w-full sm:w-64">
                   <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -536,7 +578,7 @@ ${fileName},${new Date().toISOString().split('T')[0]},Sample Data`;
                     className="pl-9"
                   />
                 </div>
-                
+
                 <Select value={sortBy} onValueChange={setSortBy}>
                   <SelectTrigger className="w-full sm:w-[150px]">
                     <div className="flex items-center gap-2">
@@ -552,8 +594,8 @@ ${fileName},${new Date().toISOString().split('T')[0]},Sample Data`;
                   </SelectContent>
                 </Select>
 
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   size="icon"
                   onClick={() => setOrder(order === 'ASC' ? 'DESC' : 'ASC')}
                   title={order === 'ASC' ? 'Ascending' : 'Descending'}
@@ -585,7 +627,7 @@ ${fileName},${new Date().toISOString().split('T')[0]},Sample Data`;
                       {userReports.map(report => (
                         <TableRow key={report.id} className="hover:bg-muted/30">
                           <TableCell className="font-medium">
-                            {report.name || 'Unknown'}
+                            {report.username || report.name || 'Unknown'}
                           </TableCell>
                           <TableCell>{report.type}</TableCell>
                           <TableCell>
@@ -601,19 +643,18 @@ ${fileName},${new Date().toISOString().split('T')[0]},Sample Data`;
                             {report.location}
                           </TableCell>
                           <TableCell>
-                            <span className={`px-2 py-1 rounded text-xs font-medium ${
-                              report.status === 'pending' ? 'bg-yellow-500/20 text-yellow-700' : 
+                            <span className={`px-2 py-1 rounded text-xs font-medium ${report.status === 'pending' ? 'bg-yellow-500/20 text-yellow-700' :
                               report.status === 'in_progress' ? 'bg-blue-500/20 text-blue-700' :
-                              report.status === 'completed' ? 'bg-green-500/20 text-green-700' :
-                              'bg-gray-500/20 text-gray-700'
-                            }`}>
+                                report.status === 'completed' ? 'bg-green-500/20 text-green-700' :
+                                  'bg-gray-500/20 text-gray-700'
+                              }`}>
                               {report.status.toUpperCase().replace('_', ' ')}
                             </span>
                           </TableCell>
                           <TableCell className="text-sm text-muted-foreground">
-                            {new Date(report.created_at).toLocaleDateString('en-IN', { 
+                            {new Date(report.created_at).toLocaleDateString('en-IN', {
                               day: '2-digit',
-                              month: '2-digit', 
+                              month: '2-digit',
                               year: 'numeric',
                               hour: '2-digit',
                               minute: '2-digit'
@@ -673,7 +714,7 @@ ${fileName},${new Date().toISOString().split('T')[0]},Sample Data`;
                 </div>
               </div>
             )}
-            
+
             {/* Pagination Controls */}
             {totalPages > 1 && (
               <div className="flex items-center justify-center gap-2 mt-6">
@@ -698,17 +739,17 @@ ${fileName},${new Date().toISOString().split('T')[0]},Sample Data`;
                 </Button>
               </div>
             )}
-            
+
           </div>
         </>
       )}
 
       {/* Hidden Dashboard Snapshot For PDF Export */}
-      <div 
-        id="dashboard-content" 
-        style={{ 
-          position: 'fixed', 
-          opacity: 0, 
+      <div
+        id="dashboard-content"
+        style={{
+          position: 'fixed',
+          opacity: 0,
           zIndex: -1,
           pointerEvents: 'none',
           fontFamily: 'Arial, sans-serif',
@@ -862,4 +903,3 @@ ${fileName},${new Date().toISOString().split('T')[0]},Sample Data`;
     </div>
   );
 };
-
