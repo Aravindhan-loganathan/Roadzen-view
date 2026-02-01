@@ -4,12 +4,14 @@ import pool from '../config/db';
 export const getDashboardSummary = async (req: Request, res: Response) => {
   try {
     // Run queries in parallel for performance
-    const [signalsRes, violationsRes, alertsRes, reportsRes, totalAlertsRes] = await Promise.all([
+    const [signalsRes, violationsRes, reportsRes, vehiclesRes, vehiclesCountRes, roadblocksCountRes, typeCountsRes] = await Promise.all([
       pool.query('SELECT congestion_level FROM traffic_signals'),
       pool.query('SELECT COUNT(*) FROM violations'),
-      pool.query('SELECT * FROM emergency_alerts WHERE status = $1', ['ACTIVE']),
       pool.query('SELECT COUNT(*) FROM reports'),
-      pool.query('SELECT COUNT(*) FROM emergency_alerts')
+      pool.query('SELECT * FROM emergency_vehicles'),
+      pool.query('SELECT COUNT(*) FROM emergency_vehicles'),
+      pool.query('SELECT COUNT(*) FROM roadblocks'),
+      pool.query('SELECT LOWER(type) as type, COUNT(*) FROM emergency_vehicles GROUP BY LOWER(type)')
     ]);
 
     const signals = signalsRes.rows;
@@ -22,12 +24,30 @@ export const getDashboardSummary = async (req: Request, res: Response) => {
 
     const totalViolations = parseInt(violationsRes.rows[0].count);
     const totalReports = parseInt(reportsRes.rows[0].count);
-    const totalAlerts = parseInt(totalAlertsRes.rows[0].count);
 
-    // Check for high priority alerts (ambulance/firetruck)
-    const hasHighPriorityAlert = alertsRes.rows.some((a: any) =>
-      ['ambulance', 'firetruck'].includes(a.type.toLowerCase())
+    // Use counts from emergency_vehicles and roadblocks
+    const activeVehicles = vehiclesRes.rows || [];
+    const activeVehiclesCount = parseInt(vehiclesCountRes.rows[0].count || '0');
+    const activeRoadblocksCount = parseInt(roadblocksCountRes.rows[0].count || '0');
+
+    const totalAlerts = activeVehiclesCount + activeRoadblocksCount;
+
+    // Check for high priority alerts (ambulance/firetruck/police) in emergency_vehicles
+    const hasHighPriorityAlert = (activeVehicles || []).some((a: any) =>
+      typeof a.type === 'string' && ['ambulance', 'firetruck', 'police'].includes(a.type.toLowerCase())
     );
+
+
+    // Counts by vehicle type
+    const typeCountsRows = (typeCountsRes && typeCountsRes.rows) || [];
+    const typeCounts: Record<string, number> = {};
+    for (const r of typeCountsRows) {
+      typeCounts[r.type] = parseInt(r.count);
+    }
+
+    const ambulanceCount = typeCounts['ambulance'] || 0;
+    const firetruckCount = typeCounts['firetruck'] || 0;
+    const policeCount = typeCounts['police'] || 0;
 
     // Mocking total vehicles for now (or you can add a 'lanes' table later)
     const totalVehicles = 12450;
@@ -45,7 +65,14 @@ export const getDashboardSummary = async (req: Request, res: Response) => {
       totalReports,
       emergencyEvents: totalAlerts,
       congestedLanes,
-      hasHighPriorityAlert
+      hasHighPriorityAlert,
+
+      // New summary stats
+      emergencyVehiclesCount: activeVehiclesCount,
+      roadblocksCount: activeRoadblocksCount,
+      ambulanceCount,
+      firetruckCount,
+      policeCount
     });
   } catch (error) {
     console.error('Dashboard Summary Error:', error);

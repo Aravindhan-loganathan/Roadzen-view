@@ -79,6 +79,27 @@ export const AdminTrafficMap: React.FC = () => {
   const [pickingEditLocationId, setPickingEditLocationId] = useState<number | null>(null);
   const [pickingEditRoadblockId, setPickingEditRoadblockId] = useState<number | null>(null);
 
+  // Dashboard summary stats
+  const [dashboardStats, setDashboardStats] = useState<{ emergencyVehiclesCount?: number; roadblocksCount?: number; ambulanceCount?: number; firetruckCount?: number; policeCount?: number } | null>(null);
+
+  const fetchDashboardSummary = async () => {
+    try {
+      const token = localStorage.getItem('traffic_token');
+      const res = await fetch('http://localhost:3000/api/dashboard/summary', { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      setDashboardStats({
+        emergencyVehiclesCount: data.emergencyVehiclesCount,
+        roadblocksCount: data.roadblocksCount,
+        ambulanceCount: data.ambulanceCount,
+        firetruckCount: data.firetruckCount,
+        policeCount: data.policeCount,
+      });
+    } catch (e) {
+      console.error('Dashboard summary load error', e);
+    }
+  };
+
   // Fetch emergency vehicles from backend
   const fetchEmergencyVehicles = async () => { 
     try {
@@ -433,11 +454,13 @@ export const AdminTrafficMap: React.FC = () => {
     fetchSignals();
     fetchEmergencyVehicles();
     fetchRoadblocks();
+    fetchDashboardSummary();
 
     // Poll emergency vehicle locations and roadblocks every 5s to simulate live movement
     const pollInterval = setInterval(() => {
       fetchEmergencyVehicles();
       fetchRoadblocks();
+      fetchDashboardSummary();
     }, 5000);
 
     return () => clearInterval(pollInterval);
@@ -1330,6 +1353,33 @@ export const AdminTrafficMap: React.FC = () => {
                     <span className={`text-xl font-black ${stat.color}`}>{stat.val}</span>
                   </div>
                 ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Emergency Summary (vehicles & roadblocks) */}
+          <div className="bg-white/3 border border-white/5 rounded-2xl p-4 shadow-inner">
+            <h3 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-3">Emergency Summary</h3>
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex-1">
+                <div className="text-[11px] font-black text-white">Emergency Vehicles</div>
+                <div className="text-2xl font-black text-primary">{dashboardStats?.emergencyVehiclesCount ?? '—'}</div>
+                <div className="flex items-center gap-2 mt-2">
+                  <span className="text-[9px] font-black text-muted-foreground">AMB</span>
+                  <span className="text-[9px] font-mono text-white/70">{dashboardStats?.ambulanceCount ?? 0}</span>
+                  <span className="text-[9px] font-black text-muted-foreground ml-3">FIRE</span>
+                  <span className="text-[9px] font-mono text-white/70">{dashboardStats?.firetruckCount ?? 0}</span>
+                  <span className="text-[9px] font-black text-muted-foreground ml-3">POL</span>
+                  <span className="text-[9px] font-mono text-white/70">{dashboardStats?.policeCount ?? 0}</span>
+                </div>
+              </div>
+
+              <div className="w-1 bg-white/5 h-12" />
+
+              <div className="flex-1">
+                <div className="text-[11px] font-black text-white">Roadblocks</div>
+                <div className="text-2xl font-black text-yellow-500">{dashboardStats?.roadblocksCount ?? '—'}</div>
+                <div className="text-[9px] text-muted-foreground mt-2">Active</div>
               </div>
             </div>
           </div>
