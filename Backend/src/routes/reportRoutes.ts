@@ -6,24 +6,19 @@ import {
   updateReportStatus,
   deleteReport,
 } from '../controllers/reportController';
-import { authMiddleware } from '../middleware/authMiddleware';
+import { authMiddleware, adminOnly } from '../middleware/authMiddleware';
 
 
 const router = Router();
 
-// User
+// User routes
 router.post('/reports', authMiddleware, createReport);
 router.get('/reports/my', authMiddleware, getMyReports);
 router.delete('/reports/:id', authMiddleware, deleteReport);
 
-// Admin
-router.get('/admin/reports', authMiddleware, getAllReports);
-
-router.patch(
-  '/reports/:id/status',
-  authMiddleware,
-  updateReportStatus
-);
+// Admin routes
+router.get('/admin/reports', authMiddleware, adminOnly, getAllReports);
+router.patch('/reports/:id/status', authMiddleware, adminOnly, updateReportStatus);
 
 
 export default router;

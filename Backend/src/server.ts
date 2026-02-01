@@ -58,6 +58,6 @@ app.get('/api/test-db', async (req: Request, res: Response) => {
 });
 
 // Start Server
-app.listen(PORT, () => {
+app.listen(3000, '0.0.0.0', () => {
   console.log(`Server is running on http://localhost:${PORT}`);
 });

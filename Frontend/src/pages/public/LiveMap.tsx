@@ -78,7 +78,12 @@ export const LiveMap: React.FC = () => {
 
     const fetchMarkers = async () => {
       try {
-        const response = await fetch('http://localhost:3000/api/signals');
+        const token = localStorage.getItem('traffic_token');
+        const response = await fetch('http://localhost:3000/api/signals', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
         if (response.ok) {
           const data = await response.json();
           // Map backend data to frontend marker format, filtering out signals without coordinates
@@ -108,7 +113,12 @@ export const LiveMap: React.FC = () => {
   // Fetch saved locations
   const fetchSavedLocations = async () => {
     try {
-      const response = await fetch('http://localhost:3000/api/saved-locations?user_id=1');
+      const token = localStorage.getItem('traffic_token');
+      const response = await fetch('http://localhost:3000/api/saved-locations', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
       if (response.ok) {
         const data = await response.json();
         setSavedLocations(data);
@@ -383,19 +393,22 @@ export const LiveMap: React.FC = () => {
     if (!newLocationName.trim() || !tempLocation) return;
     
     try {
+      const token = localStorage.getItem('traffic_token');
       const response = await fetch('http://localhost:3000/api/saved-locations', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({
           name: newLocationName,
           latitude: tempLocation.lat,
-          longitude: tempLocation.lng,
-          user_id: 1 // Assuming a default user or handled by session in backend
+          longitude: tempLocation.lng
         }),
       });
 
       if (response.ok) {
-        setShareSuccess(`Location "${name}" saved successfully!`);
+        setShareSuccess(`Location "${newLocationName}" saved successfully!`);
         setTimeout(() => setShareSuccess(null), 3000);
         fetchSavedLocations();
       } else {
@@ -425,8 +438,12 @@ export const LiveMap: React.FC = () => {
     if (!window.confirm("Are you sure you want to delete this saved location?")) return;
 
     try {
+      const token = localStorage.getItem('traffic_token');
       const response = await fetch(`http://localhost:3000/api/saved-locations/${id}`, {
         method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
       });
       if (response.ok) {
         fetchSavedLocations();

@@ -1,13 +1,15 @@
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import pool from '../config/db';
+import { authMiddleware } from '../middleware/authMiddleware';
 
 const router = Router();
 
 // POST /api/saved-locations - Save a new location
-router.post('/', async (req, res) => {
-  const { name, latitude, longitude, user_id } = req.body;
+router.post('/', authMiddleware, async (req: Request, res: Response) => {
+  const { name, latitude, longitude } = req.body;
+  const userId = req.user?.id;
 
-  if (!name || !latitude || !longitude || !user_id) {
+  if (!name || latitude === undefined || longitude === undefined) {
     return res.status(400).json({ error: 'Missing required fields' });
   }
 
@@ -16,7 +18,7 @@ router.post('/', async (req, res) => {
       `INSERT INTO saved_locations (name, latitude, longitude, user_id)
        VALUES ($1, $2, $3, $4)
        RETURNING *`,
-      [name, latitude, longitude, user_id]
+      [name, latitude, longitude, userId]
     );
     
     res.status(201).json(result.rows[0]);
@@ -26,18 +28,14 @@ router.post('/', async (req, res) => {
   }
 });
 
-// GET /api/saved-locations - Get all saved locations for a user
-router.get('/', async (req, res) => {
-  const { user_id } = req.query;
-
-  if (!user_id) {
-    return res.status(400).json({ error: 'User ID is required' });
-  }
+// GET /api/saved-locations - Get all saved locations for the authenticated user
+router.get('/', authMiddleware, async (req: Request, res: Response) => {
+  const userId = req.user?.id;
 
   try {
     const result = await pool.query(
       'SELECT * FROM saved_locations WHERE user_id = $1 ORDER BY created_at DESC',
-      [user_id]
+      [userId]
     );
     res.json(result.rows);
   } catch (error) {
@@ -47,10 +45,21 @@ router.get('/', async (req, res) => {
 });
 
 // DELETE /api/saved-locations/:id - Delete a saved location
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', authMiddleware, async (req: Request, res: Response) => {
   const { id } = req.params;
+  const userId = req.user?.id;
   
   try {
+    // Ensure the location belongs to the user
+    const checkResult = await pool.query(
+      'SELECT id FROM saved_locations WHERE id = $1 AND user_id = $2',
+      [id, userId]
+    );
+
+    if (checkResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Location not found or unauthorized' });
+    }
+
     await pool.query('DELETE FROM saved_locations WHERE id = $1', [id]);
     res.json({ message: 'Location deleted successfully' });
   } catch (error) {
