@@ -48,9 +48,14 @@ export const PublicHome: React.FC = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
+        const token = localStorage.getItem('traffic_token');
         const [summaryRes, hourlyRes] = await Promise.all([
-          fetch('http://localhost:3000/api/dashboard/summary'),
-          fetch('http://localhost:3000/api/dashboard/hourly')
+          fetch('http://localhost:3000/api/dashboard/summary', {
+            headers: { 'Authorization': `Bearer ${token}` }
+          }),
+          fetch('http://localhost:3000/api/dashboard/hourly', {
+            headers: { 'Authorization': `Bearer ${token}` }
+          })
         ]);
 
         if (summaryRes.ok && hourlyRes.ok) {

@@ -49,7 +49,12 @@ export const AlertsPage: React.FC = () => {
   useEffect(() => {
     const fetchAlerts = async () => {
       try {
-        const response = await fetch('http://localhost:3000/api/alerts');
+        const token = localStorage.getItem('traffic_token');
+        const response = await fetch('http://localhost:3000/api/alerts', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
         if (response.ok) {
           const data = await response.json();
           setAlerts(data);

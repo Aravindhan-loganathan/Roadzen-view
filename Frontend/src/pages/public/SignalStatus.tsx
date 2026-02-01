@@ -40,7 +40,12 @@ export const SignalStatus: React.FC = () => {
 
   const fetchSignals = async () => {
     try {
-      const response = await fetch('http://localhost:3000/api/signals');
+      const token = localStorage.getItem('traffic_token');
+      const response = await fetch('http://localhost:3000/api/signals', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
       if (response.ok) {
         const data = await response.json();
         setSignalData(data);

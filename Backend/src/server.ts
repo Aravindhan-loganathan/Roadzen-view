@@ -9,6 +9,7 @@ import alertRoutes from './routes/alertRoutes';
 import createTables from './db/setup';
 import reportRoutes from './routes/reportRoutes';
 import violationRoutes from './routes/violationRoutes';
+import savedLocations from './routes/savedLocations';
 
 // Load environment variables
 dotenv.config();
@@ -30,6 +31,7 @@ app.use('/api/signals', signalRoutes);
 app.use('/api/alerts', alertRoutes);
 app.use('/api', reportRoutes);
 app.use('/api', violationRoutes);
+app.use('/api/saved-locations', savedLocations);
 
 // Basic Route
 app.get('/', (req: Request, res: Response) => {
@@ -56,6 +58,6 @@ app.get('/api/test-db', async (req: Request, res: Response) => {
 });
 
 // Start Server
-app.listen(PORT, () => {
+app.listen(3000, '0.0.0.0', () => {
   console.log(`Server is running on http://localhost:${PORT}`);
 });

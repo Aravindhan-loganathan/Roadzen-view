@@ -64,6 +64,17 @@ const createTables = async () => {
     );
   `;
 
+  const savedLocationsTable = `
+    CREATE TABLE IF NOT EXISTS saved_locations (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL,
+      name VARCHAR(255) NOT NULL,
+      latitude DECIMAL(10, 6) NOT NULL,
+      longitude DECIMAL(10, 6) NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+  `;
+
   try {
     await pool.query(usersTable);
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS location VARCHAR(255)`);
@@ -208,6 +219,7 @@ const createTables = async () => {
     await pool.query(violationsTable);
     await pool.query(alertsTable);
     await pool.query(reportsTable);
+    await pool.query(savedLocationsTable);
 
     // Create indexes for better performance
     await pool.query('CREATE INDEX IF NOT EXISTS idx_reports_user_id ON reports(user_id)');
