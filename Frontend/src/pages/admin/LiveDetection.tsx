@@ -240,7 +240,6 @@ export const LiveDetection: React.FC = () => {
     let animationFrameId: number;
 
     ws.onopen = () => {
-      console.log('Connected to Model Stream');
       toast({ title: "Connected", description: "Streaming to inference server..." });
       sendFrames();
     };
