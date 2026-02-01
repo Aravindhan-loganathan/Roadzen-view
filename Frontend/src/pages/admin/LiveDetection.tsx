@@ -56,11 +56,11 @@ export const LiveDetection: React.FC = () => {
   const [isModelActive, setIsModelActive] = useState(false);
   const [fps, setFps] = useState(0);
   const [detections, setDetections] = useState<Detection[]>([]);
-  
+
   // Stats State
   const [currentCounts, setCurrentCounts] = useState<VehicleCounts>(initialCounts);
   const [totalCounts, setTotalCounts] = useState<VehicleCounts>(initialCounts);
-  
+
   // Refs
   const videoRef = useRef<HTMLVideoElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -172,7 +172,7 @@ export const LiveDetection: React.FC = () => {
   const getClassColor = (label: string) => {
     switch (label.toLowerCase()) {
       case 'car': return '#3b82f6'; // primary
-      case 'bike': 
+      case 'bike':
       case 'motorcycle': return '#22c55e'; // success
       case 'bus': return '#eab308'; // warning
       case 'truck': return '#64748b'; // muted
@@ -198,7 +198,7 @@ export const LiveDetection: React.FC = () => {
     detections.forEach(det => {
       const [x, y, w, h] = det.box;
       const color = getClassColor(det.label);
-      
+
       const sx = x * canvas.width;
       const sy = y * canvas.height;
       const sw = w * canvas.width;
@@ -250,7 +250,7 @@ export const LiveDetection: React.FC = () => {
 
       const now = Date.now();
       const lastSendTime = (ws as any)._lastSendTime || 0;
-      
+
       // Limit to ~30 FPS (every 33ms) to take advantage of GPU speed
       if (now - lastSendTime < 33) {
         animationFrameId = requestAnimationFrame(sendFrames);
@@ -259,7 +259,7 @@ export const LiveDetection: React.FC = () => {
 
       if (videoRef.current && !videoRef.current.paused && !videoRef.current.ended) {
         const video = videoRef.current;
-        
+
         // Maintain aspect ratio for model input (max 480 as per backend optimization)
         const scale = 480 / video.videoWidth;
         const w = Math.floor(video.videoWidth * scale);
@@ -268,12 +268,12 @@ export const LiveDetection: React.FC = () => {
         if (!offscreenCanvasRef.current) {
           offscreenCanvasRef.current = document.createElement('canvas');
         }
-        
+
         if (offscreenCanvasRef.current.width !== w || offscreenCanvasRef.current.height !== h) {
           offscreenCanvasRef.current.width = w;
           offscreenCanvasRef.current.height = h;
         }
-        
+
         const ctx = offscreenCanvasRef.current.getContext('2d');
         if (ctx) {
           ctx.drawImage(video, 0, 0, w, h);
@@ -286,17 +286,17 @@ export const LiveDetection: React.FC = () => {
           }, 'image/jpeg', 0.5);
         }
       }
-      
+
       animationFrameId = requestAnimationFrame(sendFrames);
     };
 
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        
+
         if (data.detections) {
           setDetections(data.detections);
-          
+
           // Calculate stats
           const current = { ...initialCounts };
           let newUniqueDetected = false;
@@ -309,7 +309,7 @@ export const LiveDetection: React.FC = () => {
             if (label === 'motorcycle' || label === 'bike') key = 'bike';
             else if (label === 'auto' || label === 'rickshaw') key = 'auto';
             else if (['car', 'bus', 'truck'].includes(label)) key = label as keyof VehicleCounts;
-            
+
             // Map Backend ID to Frontend ID (1...N)
             let displayId = det.id;
             if (det.id !== undefined) {
@@ -333,13 +333,50 @@ export const LiveDetection: React.FC = () => {
           });
 
           setCurrentCounts(current);
-          
+
           if (newUniqueDetected) {
+            // Calculate added count
+            const prevTotalSum = Object.values(totalCountsRef.current).reduce((a, b) => a + b, 0);
+            const newTotalSum = Object.values(newTotal).reduce((a, b) => a + b, 0);
+            const addedCount = newTotalSum - prevTotalSum;
+
             setTotalCounts(newTotal);
             totalCountsRef.current = newTotal;
+
+            // Update Global Daily Stats (LocalStorage)
+            try {
+              if (addedCount > 0) {
+                const now = new Date();
+                const todayKey = now.toISOString().split('T')[0];
+                const currentHour = now.getHours(); // 0-23
+
+                const stored = localStorage.getItem('traffic_stats');
+                let stats = stored ? JSON.parse(stored) : { date: todayKey, total: 0, hourly: {} };
+
+                // Reset if new day
+                if (stats.date !== todayKey) {
+                  stats = { date: todayKey, total: 0, hourly: {} };
+                }
+
+                // Update Total
+                stats.total = (stats.total || 0) + addedCount;
+
+                // Update Hourly
+                if (!stats.hourly[currentHour]) stats.hourly[currentHour] = 0;
+                stats.hourly[currentHour] += addedCount;
+
+                // Save
+                localStorage.setItem('traffic_stats', JSON.stringify(stats));
+
+                // Dispatch Local Event
+                window.dispatchEvent(new CustomEvent('trafficStatsUpdate', { detail: stats }));
+              }
+            } catch (e) {
+              console.error('Error updating traffic stats:', e);
+            }
           }
         }
-        
+
         if (data.fps) setFps(data.fps);
       } catch (e) {
         console.error('Error parsing detection data', e);
@@ -348,10 +385,10 @@ export const LiveDetection: React.FC = () => {
 
     ws.onerror = () => {
       console.error("WebSocket Error");
-      toast({ 
-        title: "Connection Failed", 
-        description: "Could not connect to inference server.", 
-        variant: "destructive" 
+      toast({
+        title: "Connection Failed",
+        description: "Could not connect to inference server.",
+        variant: "destructive"
       });
       setIsModelActive(false);
     };
@@ -396,10 +433,10 @@ export const LiveDetection: React.FC = () => {
             accept="video/*"
             onChange={handleFileUpload}
           />
-          
+
           <div className="flex items-center gap-2 bg-card border border-border px-4 py-2 rounded-lg shadow-sm">
-            <Switch 
-              id="model-toggle" 
+            <Switch
+              id="model-toggle"
               checked={isModelActive}
               onCheckedChange={setIsModelActive}
               disabled={!videoSource}
@@ -428,8 +465,8 @@ export const LiveDetection: React.FC = () => {
         {/* Video Player Section */}
         <div className="lg:col-span-2 flex flex-col gap-4 min-h-0">
           <div className="relative w-full h-full bg-black/90 rounded-xl overflow-hidden shadow-2xl border border-border/50 group">
-            <div 
-              ref={containerRef} 
+            <div
+              ref={containerRef}
               className="absolute inset-0 flex items-center justify-center cursor-pointer"
               onClick={togglePlay}
             >
@@ -460,9 +497,9 @@ export const LiveDetection: React.FC = () => {
                   </Button>
                 </div>
               )}
-              
+
               {/* Canvas Overlay */}
-              <canvas 
+              <canvas
                 ref={canvasRef}
                 className="absolute inset-0 w-full h-full pointer-events-none"
               />
@@ -470,7 +507,7 @@ export const LiveDetection: React.FC = () => {
 
             {/* Custom Controls Overlay */}
             {videoSource && (
-              <div 
+              <div
                 className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/60 to-transparent p-4 transition-opacity duration-300 opacity-0 group-hover:opacity-100"
                 onClick={(e) => e.stopPropagation()}
               >
@@ -490,7 +527,7 @@ export const LiveDetection: React.FC = () => {
                     <button onClick={togglePlay} className="text-white hover:text-primary transition-colors">
                       {isPlaying ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6" />}
                     </button>
-                    
+
                     <div className="flex items-center gap-2 group/vol">
                       <button onClick={toggleMute} className="text-white hover:text-primary transition-colors">
                         {isMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
@@ -534,7 +571,7 @@ export const LiveDetection: React.FC = () => {
                 {totalDetected}
               </span>
             </div>
-            
+
             <div className="grid grid-cols-2 gap-2 mt-4">
               <div className="p-3 rounded-lg bg-muted/30 border border-border/50">
                 <p className="text-xs text-muted-foreground mb-1">In Frame</p>
@@ -578,7 +615,7 @@ export const LiveDetection: React.FC = () => {
                   </div>
                   {/* Progress bar for visual ratio */}
                   <div className="mt-1.5 h-1.5 w-full bg-muted rounded-full overflow-hidden">
-                    <div 
+                    <div
                       className={cn("h-full rounded-full transition-all duration-500", color.replace('text-', 'bg-'))}
                       style={{ width: `${totalDetected > 0 ? (totalCounts[key as keyof VehicleCounts] / totalDetected) * 100 : 0}%` }}
                     />

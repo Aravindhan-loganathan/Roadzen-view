@@ -4,32 +4,36 @@ import pool from '../config/db';
 export const getDashboardSummary = async (req: Request, res: Response) => {
   try {
     // Run queries in parallel for performance
-    const [signalsRes, violationsRes, alertsRes] = await Promise.all([
+    const [signalsRes, violationsRes, alertsRes, reportsRes, totalAlertsRes] = await Promise.all([
       pool.query('SELECT congestion_level FROM traffic_signals'),
       pool.query('SELECT COUNT(*) FROM violations'),
-      pool.query('SELECT * FROM emergency_alerts WHERE status = $1', ['ACTIVE'])
+      pool.query('SELECT * FROM emergency_alerts WHERE status = $1', ['ACTIVE']),
+      pool.query('SELECT COUNT(*) FROM reports'),
+      pool.query('SELECT COUNT(*) FROM emergency_alerts')
     ]);
 
     const signals = signalsRes.rows;
-    
+
     // Calculate stats
     const totalSignals = signals.length;
     const heavyTraffic = signals.filter(s => s.congestion_level === 'HIGH').length;
     const moderateTraffic = signals.filter(s => s.congestion_level === 'MEDIUM').length;
     const smoothRoads = signals.filter(s => s.congestion_level === 'LOW').length;
-    
+
     const totalViolations = parseInt(violationsRes.rows[0].count);
-    const activeAlertsCount = alertsRes.rows.length;
-    
+    const totalReports = parseInt(reportsRes.rows[0].count);
+    const totalAlerts = parseInt(totalAlertsRes.rows[0].count);
+
     // Check for high priority alerts (ambulance/firetruck)
-    const hasHighPriorityAlert = alertsRes.rows.some((a: any) => 
+    const hasHighPriorityAlert = alertsRes.rows.some((a: any) =>
       ['ambulance', 'firetruck'].includes(a.type.toLowerCase())
     );
 
     // Mocking total vehicles for now (or you can add a 'lanes' table later)
-    const totalVehicles = 12450; 
-    // Mock congested lanes based on heavy traffic signals
-    const congestedLanes = heavyTraffic * 2 + moderateTraffic;
+    const totalVehicles = 12450;
+
+    // Congested lanes based on heavy traffic signals
+    const congestedLanes = heavyTraffic;
 
     res.json({
       totalVehicles,
@@ -38,7 +42,8 @@ export const getDashboardSummary = async (req: Request, res: Response) => {
       moderateTraffic,
       smoothRoads,
       totalViolations,
-      emergencyEvents: activeAlertsCount,
+      totalReports,
+      emergencyEvents: totalAlerts,
       congestedLanes,
       hasHighPriorityAlert
     });
