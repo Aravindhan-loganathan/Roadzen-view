@@ -17,16 +17,37 @@ export const AdminTrafficMap: React.FC = () => {
 
   useEffect(() => {
     const fetchSignals = async () => {
-      try {
-        const res = await fetch('http://localhost:3000/api/signals');
-        const data = await res.json();
-        setSignals(data.filter((s: any) => s.lat && s.lng));
-      } catch (e) {
-        console.error('Failed to load signals', e);
-      } finally {
-        setLoading(false);
-      }
-    };
+  try {
+    const token = localStorage.getItem('traffic_token');
+
+    const res = await fetch('http://localhost:3000/api/signals', {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+
+    const data = await res.json();
+
+    // SAFETY CHECK
+    if (!Array.isArray(data)) {
+      console.error('Signals API did not return an array:', data);
+      setSignals([]);
+      return;
+    }
+
+    setSignals(data.filter((s: any) => s.lat && s.lng));
+  } catch (e) {
+    console.error('Failed to load signals', e);
+    setSignals([]);
+  } finally {
+    setLoading(false);
+  }
+};
+
 
     fetchSignals();
   }, []);
