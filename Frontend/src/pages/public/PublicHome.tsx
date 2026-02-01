@@ -308,7 +308,7 @@ export const PublicHome: React.FC = () => {
             <p className="text-xl font-semibold mt-1">{userReportCount}</p>
           </div>
           <div className="p-4 rounded-lg bg-muted/50">
-            <p className="text-sm text-muted-foreground">Road Closures</p>
+            <p className="text-sm text-muted-foreground">Roadblocks</p>
             <p className="text-xl font-semibold mt-1">2 Active</p>
           </div>
         </div>

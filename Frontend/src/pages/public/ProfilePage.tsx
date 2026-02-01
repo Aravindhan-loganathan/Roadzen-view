@@ -260,8 +260,8 @@ export const ProfilePage: React.FC = () => {
           </div>
           <div className="flex items-center justify-between py-2 border-t border-border">
             <div>
-              <p className="font-medium">Road Closures</p>
-              <p className="text-sm text-muted-foreground">Be informed about road closures and diversions</p>
+              <p className="font-medium">Roadblocks</p>
+              <p className="text-sm text-muted-foreground">Be informed about roadblocks and diversions</p>
             </div>
             <Switch />
           </div>

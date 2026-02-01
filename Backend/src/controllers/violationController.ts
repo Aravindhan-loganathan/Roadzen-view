@@ -42,23 +42,26 @@ export const getViolations = async (req: Request, res: Response) => {
     const params: any[] = [];
 
     // Date range filter
-    if (dateRange) {
-      const now = new Date();
-      let startDate = new Date();
+    let dateFilterQuery = '';
+    const now = new Date();
+    let startDate = new Date();
 
+    if (dateRange) {
       if (dateRange === 'today') {
         startDate.setHours(0, 0, 0, 0);
       } else if (dateRange === 'week') {
         // Start of this week (Monday)
-        startDate.setDate(now.getDate() - now.getDay() + 1);
+        const day = now.getDay();
+        const diff = now.getDate() - day + (day === 0 ? -6 : 1);
+        startDate.setDate(diff);
         startDate.setHours(0, 0, 0, 0);
       } else if (dateRange === 'month') {
         // Start of this month
         startDate.setDate(1);
         startDate.setHours(0, 0, 0, 0);
       }
-
-      query += ` AND timestamp >= $${params.length + 1}`;
+      dateFilterQuery = ' AND timestamp >= $' + (params.length + 1);
+      query += dateFilterQuery;
       params.push(startDate);
     }
 
@@ -85,6 +88,11 @@ export const getViolations = async (req: Request, res: Response) => {
     // Get total count
     let countQuery = 'SELECT COUNT(*) FROM violations WHERE 1=1';
     const countParams: any[] = [];
+
+    if (dateRange) {
+      countQuery += ` AND timestamp >= $${countParams.length + 1}`;
+      countParams.push(startDate);
+    }
 
     if (status) {
       countQuery += ` AND status = $${countParams.length + 1}`;

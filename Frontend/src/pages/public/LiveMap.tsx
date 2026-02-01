@@ -861,7 +861,7 @@ export const LiveMap: React.FC = () => {
                   </div>
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 rounded-full bg-yellow-500 border-2 border-white shadow-sm flex items-center justify-center text-sm">🚧</div>
-                    <span className="text-xs font-medium">Roadblock / Closure</span>
+                    <span className="text-xs font-medium">Roadblock</span>
                   </div>
                 </div>
               </div>
