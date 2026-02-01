@@ -1,26 +1,43 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  AlertTriangle,
   Ambulance,
   Flame,
-  Car,
   Construction,
-  Bell,
-  Clock,
   MapPin,
   Loader2,
-  Megaphone,
-  Activity,
-  X,
-  CheckCircle,
-  CloudRain
+  ArrowLeft,
+  Clock,
+  Route,
+  ShieldAlert,
+  AlertTriangle
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Switch } from '@/components/ui/switch';
-import { useToast } from '@/hooks/use-toast';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { useMapContext } from '@/contexts/MapContext';
+
+// Logic to check if a point is near a path (lat/lng array)
+const isPointNearPath = (pLat: number, pLng: number, path: [number, number][], threshold = 0.005) => {
+  if (!path || path.length < 2) return false;
+  for (let i = 0; i < path.length - 1; i++) {
+    const a = path[i];
+    const b = path[i + 1];
+    
+    // Distance from point to line segment
+    const dist = getDistanceToSegment(pLat, pLng, a[0], a[1], b[0], b[1]);
+    if (dist <= threshold) return true;
+  }
+  return false;
+};
+
+const getDistanceToSegment = (px: number, py: number, x1: number, y1: number, x2: number, y2: number) => {
+  const l2 = Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2);
+  if (l2 === 0) return Math.sqrt(Math.pow(px - x1, 2) + Math.pow(py - y1, 2));
+  let t = ((px - x1) * (x2 - x1) + (py - y1) * (y2 - y1)) / l2;
+  t = Math.max(0, Math.min(1, t));
+  const projX = x1 + t * (x2 - x1);
+  const projY = y1 + t * (y2 - y1);
+  return Math.sqrt(Math.pow(px - projX, 2) + Math.pow(py - projY, 2));
+};
 
 interface Alert {
   id: string | number;
@@ -39,69 +56,32 @@ export const AlertsPage: React.FC = () => {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
-  const { toast } = useToast();
-  const [showReportModal, setShowReportModal] = useState(false);
-  const [notificationsEnabled, setNotificationsEnabled] = useState(() => localStorage.getItem('traffic_notifications') === 'true');
-  const [reportType, setReportType] = useState('accident');
-  const [reportLocation, setReportLocation] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { suggestedRoutes, setMapCenter, setMapZoom } = useMapContext();
+
+  const fetchAlerts = async () => {
+    try {
+      const token = localStorage.getItem('traffic_token');
+      const response = await fetch('http://localhost:3000/api/alerts', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setAlerts(data);
+      }
+    } catch (error) {
+      console.error('Error fetching alerts:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchAlerts = async () => {
-      try {
-        const token = localStorage.getItem('traffic_token');
-        const response = await fetch('http://localhost:3000/api/alerts', {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-        if (response.ok) {
-          const data = await response.json();
-          setAlerts(data);
-        }
-      } catch (error) {
-        console.error('Error fetching alerts:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchAlerts();
     const interval = setInterval(fetchAlerts, 10000);
     return () => clearInterval(interval);
   }, []);
-
-  const handleNotificationToggle = (checked: boolean) => {
-    setNotificationsEnabled(checked);
-    localStorage.setItem('traffic_notifications', String(checked));
-    toast({
-      title: checked ? "Notifications Enabled" : "Notifications Disabled",
-      description: checked ? "You will receive real-time alerts." : "You have opted out of alerts.",
-    });
-  };
-
-  const handleReportSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    // Simulate API call
-    setTimeout(() => {
-      setIsSubmitting(false);
-      setShowReportModal(false);
-      setReportLocation('');
-      toast({
-        title: "Report Submitted",
-        description: "Thank you. Your report has been sent for verification.",
-      });
-    }, 1500);
-  };
-
-  const handleVerify = (id: number) => {
-    toast({
-      title: "Incident Verified",
-      description: "Thanks for your feedback! This helps the community.",
-      variant: "default",
-    });
-  };
 
   const getAlertIcon = (type: string) => {
     switch (type) {
@@ -109,25 +89,10 @@ export const AlertsPage: React.FC = () => {
         return <Ambulance className="w-6 h-6" />;
       case 'firetruck':
         return <Flame className="w-6 h-6" />;
-      case 'accident':
-        return <Car className="w-6 h-6" />;
       case 'closure':
         return <Construction className="w-6 h-6" />;
-      case 'weather':
-        return <CloudRain className="w-6 h-6" />;
       default:
         return <AlertTriangle className="w-6 h-6" />;
-    }
-  };
-
-  const getPriorityStyle = (priority: string) => {
-    switch (priority) {
-      case 'high':
-        return 'border-destructive/50 bg-destructive/5';
-      case 'medium':
-        return 'border-warning/50 bg-warning/5';
-      default:
-        return 'border-border';
     }
   };
 
@@ -137,285 +102,184 @@ export const AlertsPage: React.FC = () => {
         return 'bg-destructive/10 text-destructive';
       case 'firetruck':
         return 'bg-warning/10 text-warning';
-      case 'accident':
-        return 'bg-destructive/10 text-destructive';
       case 'closure':
         return 'bg-muted text-foreground';
-      case 'weather':
-        return 'bg-blue-500/10 text-blue-500';
       default:
         return 'bg-muted text-muted-foreground';
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      </div>
-    );
-  }
+  const handleCardClick = (lat?: number, lng?: number) => {
+    if (lat && lng) {
+      setMapCenter([lat, lng]);
+      // Removed setMapZoom to prevent automatic zooming
+      navigate('/public/map');
+    }
+  };
 
-  const roadClosures = alerts.filter(a => a.type === 'closure').map(a => ({
-    id: a.id,
-    location: a.location,
-    reason: a.title,
-    duration: a.impact || 'Unknown'
-  }));
+  const hasActiveView = suggestedRoutes && suggestedRoutes.length > 0;
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h1 className="text-2xl md:text-3xl font-display font-bold">Alerts & Emergency</h1>
-          <p className="text-muted-foreground mt-1">Real-time emergency alerts and road notifications</p>
+          <h1 className="text-2xl md:text-3xl font-display font-bold">Traffic Alerts</h1>
+          <p className="text-muted-foreground mt-1 text-sm">
+            {hasActiveView ? 'Live emergency and roadblock status for your routes' : 'Real-time emergency vehicles and road updates'}
+          </p>
         </div>
-        <div className="flex items-center gap-3">
-          <Button 
-            variant="destructive" 
-            className="gap-2 shadow-lg shadow-destructive/20"
-            onClick={() => setShowReportModal(true)}
-          >
-            <Megaphone className="w-4 h-4" />
-            Report Incident
-          </Button>
-          <span className="text-sm text-muted-foreground">Push Notifications</span>
-          <Switch 
-            checked={notificationsEnabled}
-            onCheckedChange={handleNotificationToggle}
-          />
-        </div>
-      </div>
-
-      {/* Emergency Alert Banner */}
-      <div className="gradient-bg rounded-xl p-6 animate-pulse-glow">
-        <div className="flex items-start gap-4">
-          <div className="w-12 h-12 rounded-xl bg-primary-foreground/20 flex items-center justify-center">
-            <AlertTriangle className="w-6 h-6 text-primary-foreground" />
-          </div>
-          <div className="flex-1">
-            <h3 className="font-semibold text-lg text-primary-foreground">Priority Route Active</h3>
-            <p className="text-primary-foreground/80 mt-1">
-              Emergency vehicle priority routing is active on MG Road → Hospital Road corridor.
-              All signals adjusted for fastest passage.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Emergency Vehicles Section */}
-      <div>
-        <h2 className="text-xl font-display font-semibold mb-4 flex items-center gap-2">
-          <Ambulance className="w-5 h-5 text-destructive" />
-          Active Emergency Vehicles
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {alerts
-            .filter(a => ['ambulance', 'firetruck', 'weather'].includes(a.type))
-            .map((alert, index) => (
-              <div
-                key={alert.id}
-                className={`glow-card p-5 border-2 ${getPriorityStyle(alert.priority)} animate-fade-in`}
-                style={{ animationDelay: `${index * 100}ms` }}
-              >
-                <div className="flex items-start gap-4">
-                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${getIconBgStyle(alert.type)}`}>
-                    {getAlertIcon(alert.type)}
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className="font-semibold">{alert.title}</h3>
-                      <span className={`text-xs font-medium px-2 py-1 rounded-full ${
-                        alert.priority === 'high' 
-                          ? 'bg-destructive/10 text-destructive' 
-                          : 'bg-warning/10 text-warning'
-                      }`}>
-                        {alert.priority.toUpperCase()}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
-                      <MapPin className="w-4 h-4" />
-                      {alert.location}
-                    </div>
-                    {alert.eta && (
-                      <div className="flex items-center gap-2 text-sm">
-                        <Clock className="w-4 h-4 text-primary" />
-                        <span className="font-medium">ETA: {alert.eta}</span>
-                      </div>
-                    )}
-                    {alert.impact && (
-                      <div className="mt-2 text-xs bg-background/50 p-2 rounded border border-border flex items-center gap-2">
-                        <Activity className="w-3 h-3 text-destructive" />
-                        <span className="font-medium text-foreground/80">Impact: {alert.impact}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
-        </div>
-      </div>
-
-      {/* Accidents & Incidents */}
-      <div>
-        <h2 className="text-xl font-display font-semibold mb-4 flex items-center gap-2">
-          <Car className="w-5 h-5 text-warning" />
-          Accidents & Incidents
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {alerts
-            .filter(a => a.type === 'accident')
-            .map((alert, index) => (
-              <div
-                key={alert.id}
-                className={`glow-card p-5 border ${getPriorityStyle(alert.priority)} animate-fade-in`}
-                style={{ animationDelay: `${index * 100}ms` }}
-              >
-                <div className="flex items-start gap-4">
-                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${getIconBgStyle(alert.type)}`}>
-                    {getAlertIcon(alert.type)}
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-semibold mb-2">{alert.title}</h3>
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground mb-3">
-                      <MapPin className="w-4 h-4" />
-                      {alert.location}
-                    </div>
-                    <div className="flex gap-2">
-                      {alert.latitude && alert.longitude && (
-                        <Button 
-                          size="sm" 
-                          variant="outline" 
-                          className="gap-2"
-                          onClick={() => navigate('/public/map', { state: { center: [alert.latitude, alert.longitude], zoom: 16 } })}
-                        >
-                          <MapPin className="w-3 h-3" />
-                          Show on Map
-                        </Button>
-                      )}
-                      <Button size="sm" variant="ghost" className="gap-1" onClick={() => handleVerify(alert.id)}>
-                        <CheckCircle className="w-3 h-3" />
-                        Verify
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-        </div>
-      </div>
-
-      {/* Road Closures */}
-      <div>
-        <h2 className="text-xl font-display font-semibold mb-4 flex items-center gap-2">
-          <Construction className="w-5 h-5 text-muted-foreground" />
-          Road Closures & Maintenance
-        </h2>
-        {roadClosures.length > 0 ? (
-          <div className="glow-card overflow-hidden">
-            <table className="w-full">
-              <thead className="bg-muted/50">
-                <tr>
-                  <th className="text-left p-4 font-medium text-sm">Location</th>
-                  <th className="text-left p-4 font-medium text-sm">Reason</th>
-                  <th className="text-left p-4 font-medium text-sm">Duration/Impact</th>
-                </tr>
-              </thead>
-              <tbody>
-                {roadClosures.map((closure, index) => (
-                  <tr key={closure.id} className="border-t border-border">
-                    <td className="p-4">{closure.location}</td>
-                    <td className="p-4 text-muted-foreground">{closure.reason}</td>
-                    <td className="p-4">
-                      <span className="text-sm bg-muted px-2 py-1 rounded">{closure.duration}</span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="p-8 text-center text-muted-foreground bg-muted/20 rounded-lg border border-dashed">
-            No active road closures reported.
-          </div>
-        )}
-      </div>
-
-      {/* Push Notification UI Placeholder */}
-      <div className="glow-card p-6">
-        <div className="flex items-start gap-4">
-          <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
-            <Bell className="w-6 h-6 text-primary" />
-          </div>
-          <div className="flex-1">
-            <h3 className="font-semibold mb-2">Push Notifications</h3>
-            <p className="text-sm text-muted-foreground mb-4">
-              Enable push notifications to receive real-time alerts about traffic conditions,
-              emergency vehicles, and road closures in your area.
-            </p>
-            <Button variant="outline" onClick={() => handleNotificationToggle(!notificationsEnabled)}>
-              {notificationsEnabled ? 'Disable Notifications' : 'Enable Notifications'}
+        <div className="flex items-center gap-4">
+          {hasActiveView && (
+            <Button variant="outline" size="sm" onClick={() => navigate('/public/map')} className="gap-2">
+              <ArrowLeft className="w-4 h-4" />
+              Back to Map
             </Button>
-          </div>
+          )}
         </div>
       </div>
 
-      {/* Report Incident Modal */}
-      {showReportModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm animate-fade-in">
-          <div className="w-full max-w-md glow-card p-6 m-4 relative bg-card">
-            <button 
-              onClick={() => setShowReportModal(false)}
-              className="absolute right-4 top-4 text-muted-foreground hover:text-foreground"
-            >
-              <X className="w-5 h-5" />
-            </button>
-            
-            <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-              <Megaphone className="w-5 h-5 text-primary" />
-              Report Incident
-            </h2>
-            
-            <form onSubmit={handleReportSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label>Incident Type</Label>
-                <div className="grid grid-cols-2 gap-2">
-                  {['accident', 'closure', 'weather', 'hazard'].map(type => (
-                    <button
-                      key={type}
-                      type="button"
-                      onClick={() => setReportType(type)}
-                      className={`p-2 rounded border text-sm capitalize ${
-                        reportType === type 
-                          ? 'border-primary bg-primary/10 text-primary' 
-                          : 'border-border hover:bg-muted'
-                      }`}
-                    >
-                      {type}
-                    </button>
-                  ))}
+      {!hasActiveView ? (
+        <div className="flex flex-col items-center justify-center min-h-[400px] text-center border rounded-2xl bg-card/50 p-12 backdrop-blur-sm border-white/10">
+          <div className="p-4 bg-primary/10 rounded-full mb-6">
+            <ShieldAlert className="w-10 h-10 text-primary" />
+          </div>
+          <h3 className="text-2xl font-bold mb-3">No Route Selected</h3>
+          <p className="text-muted-foreground max-w-md mb-8">
+            Select a route on the Live Map to view specific emergency vehicles and roadblocks along your path.
+          </p>
+          <Button onClick={() => navigate('/public/map')} className="gap-2 px-6 h-12 text-base gradient-bg">
+            <Route className="w-5 h-5" />
+            Find a Route
+          </Button>
+        </div>
+      ) : (
+        <div className="space-y-8">
+          {suggestedRoutes.slice(0, 2).map((route, rIndex) => {
+            const routeAlerts = alerts.filter(a => {
+                if (!a.latitude || !a.longitude) return false;
+                return isPointNearPath(a.latitude, a.longitude, route.path, 0.005);
+            });
+            const emergencyVehicles = routeAlerts.filter(a => ['ambulance', 'firetruck', 'police'].includes(a.type));
+            const roadblocks = routeAlerts.filter(a => a.type === 'closure');
+
+            return (
+              <div key={route.id} className="border rounded-2xl p-6 bg-card/40 backdrop-blur-md shadow-xl border-white/5">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8 pb-4 border-b border-white/10">
+                  <div className="flex items-center gap-4">
+                    <div className="bg-primary/20 p-2 rounded-xl text-primary font-bold text-lg shadow-inner">
+                      R{rIndex + 1}
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-bold">{route.name}</h2>
+                      <div className="flex items-center gap-4 mt-1 text-sm text-muted-foreground font-medium">
+                        <span className="flex items-center gap-1.5"><Clock className="w-4 h-4" /> {route.time}</span>
+                        <span className="flex items-center gap-1.5"><Route className="w-4 h-4" /> {route.distance}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider border shadow-sm ${
+                    route.traffic === 'heavy' ? 'bg-destructive/10 border-destructive/30 text-destructive' :
+                    route.traffic === 'moderate' ? 'bg-warning/10 border-warning/30 text-warning' :
+                    'bg-green-500/10 border-green-500/30 text-green-500'
+                  }`}>
+                    {route.traffic} Traffic
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-stretch">
+                  {/* Emergency Vehicles Section */}
+                  <div className="flex flex-col h-full">
+                    <h3 className="text-lg font-bold flex items-center gap-2 mb-4 shrink-0">
+                      <Ambulance className="w-5 h-5 text-destructive animate-pulse" />
+                      Emergency Vehicles
+                    </h3>
+                    <div className="flex-1 space-y-4">
+                      {emergencyVehicles.length > 0 ? (
+                        emergencyVehicles.map((alert) => (
+                          <div 
+                            key={alert.id} 
+                            onClick={() => handleCardClick(alert.latitude, alert.longitude)}
+                            className="glow-card p-4 border border-white/5 bg-white/[0.02] cursor-pointer hover:bg-white/[0.05] transition-colors h-[100px] flex items-center"
+                          >
+                            <div className="flex items-center gap-4 w-full">
+                              <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${getIconBgStyle(alert.type)}`}>
+                                {getAlertIcon(alert.type)}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center justify-between mb-1 gap-2">
+                                  <h4 className="font-bold truncate">{alert.title}</h4>
+                                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${
+                                    alert.priority === 'high' ? 'bg-destructive text-white' : 'bg-warning text-black'
+                                  }`}>
+                                    {alert.priority}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-1.5 text-sm text-muted-foreground truncate">
+                                  <MapPin className="w-3.5 h-3.5" />
+                                  <span className="truncate">{alert.location}</span>
+                                </div>
+                                {alert.eta && (
+                                  <div className="flex items-center gap-1.5 text-xs font-semibold text-primary mt-1">
+                                    <Clock className="w-3.5 h-3.5" />
+                                    ETA: {alert.eta}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="h-full min-h-[100px] flex items-center justify-center text-center text-muted-foreground bg-white/5 rounded-xl border border-dashed border-white/10 p-6">
+                          No active emergency vehicles on this route.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Roadblocks Section */}
+                  <div className="flex flex-col h-full">
+                    <h3 className="text-lg font-bold flex items-center gap-2 mb-4 shrink-0">
+                      <Construction className="w-5 h-5 text-warning" />
+                      Roadblocks
+                    </h3>
+                    <div className="flex-1 space-y-4">
+                      {roadblocks.length > 0 ? (
+                        roadblocks.map((alert) => (
+                          <div 
+                            key={alert.id} 
+                            onClick={() => handleCardClick(alert.latitude, alert.longitude)}
+                            className="glow-card p-4 border border-white/5 bg-white/[0.02] cursor-pointer hover:bg-white/[0.05] transition-colors h-[100px] flex items-center"
+                          >
+                            <div className="flex items-center gap-4 w-full">
+                              <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 bg-muted text-foreground">
+                                <Construction className="w-6 h-6" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <h4 className="font-bold mb-1 truncate">{alert.title}</h4>
+                                <div className="flex items-center gap-1.5 text-sm text-muted-foreground truncate">
+                                  <MapPin className="w-3.5 h-3.5" />
+                                  <span className="truncate">{alert.location}</span>
+                                </div>
+                                {alert.impact && (
+                                  <div className="inline-block px-2 py-1 rounded bg-muted/50 text-[10px] font-medium border border-white/5 mt-1">
+                                    Impact: {alert.impact}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="h-full min-h-[100px] flex items-center justify-center text-center text-muted-foreground bg-white/5 rounded-xl border border-dashed border-white/10 p-6">
+                          No active roadblocks on this route.
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
-              
-              <div className="space-y-2">
-                <Label>Location</Label>
-                <Input 
-                  placeholder="e.g., Main Street Junction" 
-                  value={reportLocation}
-                  onChange={(e) => setReportLocation(e.target.value)}
-                  required 
-                />
-              </div>
-
-              <div className="pt-2">
-                <Button type="submit" className="w-full gradient-bg" disabled={isSubmitting}>
-                  {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                  Submit Report
-                </Button>
-              </div>
-            </form>
-          </div>
+            );
+          })}
         </div>
       )}
     </div>
