@@ -38,31 +38,102 @@ interface DashboardData {
 interface HourlyData {
   hour: string;
   vehicles: number;
+  rawHour?: number;
 }
 
 export const PublicHome: React.FC = () => {
   const [data, setData] = useState<DashboardData | null>(null);
+  const [vehiclesCount, setVehiclesCount] = useState<number>(0);
   const [hourlyData, setHourlyData] = useState<HourlyData[]>([]);
+  const [userReportCount, setUserReportCount] = useState<number>(0);
   const [loading, setLoading] = useState(true);
 
+  // Live Traffic Stats (LocalStorage)
+  useEffect(() => {
+    // Helper to format hourly data
+    const formatHourlyData = (hourlyMap: Record<string, number>) => {
+      const hours = Array.from({ length: 24 }, (_, i) => i);
+      return hours.map(h => {
+        const ampm = h >= 12 ? 'PM' : 'AM';
+        const h12 = h % 12 || 12;
+        const label = `${h12} ${ampm}`;
+        return {
+          hour: label,
+          vehicles: hourlyMap[h] || 0,
+          rawHour: h
+        };
+      }).filter((_, i) => i >= 6 && i <= 22); // Filter for display relevance
+    };
+
+    const updateFromStorage = () => {
+      try {
+        const stored = localStorage.getItem('traffic_stats');
+        if (stored) {
+          const stats = JSON.parse(stored);
+          const now = new Date();
+          const todayKey = now.toISOString().split('T')[0];
+
+          if (stats.date === todayKey) {
+            setVehiclesCount(stats.total || 0);
+            if (stats.hourly) {
+              setHourlyData(formatHourlyData(stats.hourly));
+            }
+          } else {
+            setVehiclesCount(0);
+            setHourlyData(formatHourlyData({}));
+          }
+        } else {
+          setHourlyData(formatHourlyData({}));
+        }
+      } catch (e) {
+        console.error('Failed to parse traffic stats', e);
+      }
+    };
+
+    updateFromStorage();
+
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'traffic_stats') updateFromStorage();
+    };
+
+    const onCustom = (e: CustomEvent) => {
+      if (e.detail) {
+        setVehiclesCount(e.detail.total || 0);
+        if (e.detail.hourly) {
+          setHourlyData(formatHourlyData(e.detail.hourly));
+        }
+      }
+    };
+
+    window.addEventListener('storage', onStorage);
+    window.addEventListener('trafficStatsUpdate', onCustom as EventListener);
+
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener('trafficStatsUpdate', onCustom as EventListener);
+    };
+  }, []);
+
+  // Dashboard Data & User Reports
   useEffect(() => {
     const fetchData = async () => {
       try {
         const token = localStorage.getItem('traffic_token');
-        const [summaryRes, hourlyRes] = await Promise.all([
-          fetch('http://localhost:3000/api/dashboard/summary', {
-            headers: { 'Authorization': `Bearer ${token}` }
-          }),
-          fetch('http://localhost:3000/api/dashboard/hourly', {
-            headers: { 'Authorization': `Bearer ${token}` }
-          })
+        const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+
+        const [summaryRes, reportsRes] = await Promise.all([
+          fetch('http://localhost:3000/api/dashboard/summary', { headers }),
+          fetch('http://localhost:3000/api/reports/my?limit=1', { headers })
         ]);
 
-        if (summaryRes.ok && hourlyRes.ok) {
+        if (summaryRes.ok) {
           const summary = await summaryRes.json();
-          const hourly = await hourlyRes.json();
           setData(summary);
-          setHourlyData(hourly);
+        }
+
+        if (reportsRes.ok) {
+          const reportsData = await reportsRes.json();
+          setUserReportCount(reportsData.pagination.total || 0);
         }
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
@@ -72,9 +143,23 @@ export const PublicHome: React.FC = () => {
     };
 
     fetchData();
-    const interval = setInterval(fetchData, 30000); // Refresh every 30s
+    const interval = setInterval(fetchData, 30000);
     return () => clearInterval(interval);
   }, []);
+
+  const getPeakHourDisplay = () => {
+    if (!hourlyData.length) return "00:00 - 00:00";
+    const allZero = hourlyData.every(d => d.vehicles === 0);
+    if (allZero) return "00:00 - 00:00";
+
+    const maxEntry = hourlyData.reduce((prev, curr) => prev.vehicles > curr.vehicles ? prev : curr);
+    // maxEntry.hour is "6 PM"
+    const [time, period] = maxEntry.hour.split(' ');
+    let nextTime = parseInt(time) + 1;
+    if (nextTime === 13) nextTime = 1;
+
+    return `${maxEntry.hour} - ${nextTime} ${period}`;
+  };
 
   if (loading) {
     return (
@@ -88,25 +173,7 @@ export const PublicHome: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Emergency Banner */}
-      {data.hasHighPriorityAlert && (
-        <div className="gradient-bg rounded-xl p-4 flex items-center justify-between animate-pulse-glow">
-          <div className="flex items-center gap-3">
-            <AlertTriangle className="w-6 h-6 text-primary-foreground" />
-            <div>
-              <p className="font-semibold text-primary-foreground">Emergency Alert Active</p>
-              <p className="text-sm text-primary-foreground/80">
-                Priority route active for emergency vehicles
-              </p>
-            </div>
-          </div>
-          <Link to="/public/alerts">
-            <Button variant="secondary" size="sm" className="gap-1">
-              View Details <ArrowRight className="w-4 h-4" />
-            </Button>
-          </Link>
-        </div>
-      )}
+
 
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -157,16 +224,14 @@ export const PublicHome: React.FC = () => {
         <div className="space-y-4">
           <StatusCard
             title="Total Vehicles Today"
-            value={data.totalVehicles}
+            value={vehiclesCount}
             icon={Car}
-            trend={{ value: 12, isPositive: true }}
           />
           <StatusCard
             title="Congested Lanes"
             value={data.congestedLanes}
             icon={TrendingUp}
             variant="warning"
-            trend={{ value: 5, isPositive: false }}
           />
           <StatusCard
             title="Emergency Events"
@@ -197,14 +262,14 @@ export const PublicHome: React.FC = () => {
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-              <XAxis 
-                dataKey="hour" 
-                stroke="hsl(var(--muted-foreground))" 
+              <XAxis
+                dataKey="hour"
+                stroke="hsl(var(--muted-foreground))"
                 fontSize={12}
                 tickLine={false}
               />
-              <YAxis 
-                stroke="hsl(var(--muted-foreground))" 
+              <YAxis
+                stroke="hsl(var(--muted-foreground))"
                 fontSize={12}
                 tickLine={false}
                 axisLine={false}
@@ -233,18 +298,14 @@ export const PublicHome: React.FC = () => {
       {/* Today's Highlights */}
       <div className="glow-card p-6 animate-fade-in">
         <h3 className="font-display font-semibold text-lg mb-4">Today's Highlights</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="p-4 rounded-lg bg-muted/50">
             <p className="text-sm text-muted-foreground">Peak Hour</p>
-            <p className="text-xl font-semibold mt-1">6:00 PM - 7:00 PM</p>
+            <p className="text-xl font-semibold mt-1">{getPeakHourDisplay()}</p>
           </div>
           <div className="p-4 rounded-lg bg-muted/50">
-            <p className="text-sm text-muted-foreground">Most Congested</p>
-            <p className="text-xl font-semibold mt-1">Outer Ring Road</p>
-          </div>
-          <div className="p-4 rounded-lg bg-muted/50">
-            <p className="text-sm text-muted-foreground">Avg. Wait Time</p>
-            <p className="text-xl font-semibold mt-1">3.5 minutes</p>
+            <p className="text-sm text-muted-foreground">User Reported Issues</p>
+            <p className="text-xl font-semibold mt-1">{userReportCount}</p>
           </div>
           <div className="p-4 rounded-lg bg-muted/50">
             <p className="text-sm text-muted-foreground">Road Closures</p>
