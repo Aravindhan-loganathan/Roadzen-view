@@ -80,11 +80,10 @@ export const LoginPage: React.FC = () => {
             <button
               type="button"
               onClick={() => setRole('user')}
-              className={`glow-card p-4 flex flex-col items-center gap-2 transition-all ${
-                role === 'user'
+              className={`glow-card p-4 flex flex-col items-center gap-2 transition-all ${role === 'user'
                   ? 'border-primary bg-primary/5 ring-2 ring-primary'
                   : 'hover:bg-muted'
-              }`}
+                }`}
             >
               <User className={`w-8 h-8 ${role === 'user' ? 'text-primary' : 'text-muted-foreground'}`} />
               <span className={`font-medium ${role === 'user' ? 'text-primary' : 'text-muted-foreground'}`}>
@@ -94,11 +93,10 @@ export const LoginPage: React.FC = () => {
             <button
               type="button"
               onClick={() => setRole('admin')}
-              className={`glow-card p-4 flex flex-col items-center gap-2 transition-all ${
-                role === 'admin'
+              className={`glow-card p-4 flex flex-col items-center gap-2 transition-all ${role === 'admin'
                   ? 'border-primary bg-primary/5 ring-2 ring-primary'
                   : 'hover:bg-muted'
-              }`}
+                }`}
             >
               <Shield className={`w-8 h-8 ${role === 'admin' ? 'text-primary' : 'text-muted-foreground'}`} />
               <span className={`font-medium ${role === 'admin' ? 'text-primary' : 'text-muted-foreground'}`}>

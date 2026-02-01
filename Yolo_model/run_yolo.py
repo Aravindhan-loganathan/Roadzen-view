@@ -3,7 +3,7 @@ from ultralytics import YOLO
 model = YOLO("epoch10.pt")
 
 model.track(
-    source="traffic.mp4",
+    source="http://192.168.137.137:8080",
     tracker="bytetrack.yaml",
     conf=0.4,
     persist=True,
