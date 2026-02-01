@@ -41,6 +41,55 @@ const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => 
   return R * c; // Distance in km
 };
 
+// Distance in meters using haversine
+const haversineMeters = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+  return getDistance(lat1, lon1, lat2, lon2) * 1000;
+};
+
+// Calculate distance from point P to segment AB (meters) using equirectangular approx
+const pointToSegmentDistanceMeters = (p: [number, number], a: [number, number], b: [number, number]) => {
+  // reference latitude for scaling
+  const refLat = (a[0] + b[0]) / 2;
+  const toXY = (lat: number, lng: number) => {
+    const R = 6371000; // meters
+    const x = deg2rad(lng) * R * Math.cos(deg2rad(refLat));
+    const y = deg2rad(lat) * R;
+    return { x, y };
+  };
+
+  const P = toXY(p[0], p[1]);
+  const A = toXY(a[0], a[1]);
+  const B = toXY(b[0], b[1]);
+
+  const vx = B.x - A.x;
+  const vy = B.y - A.y;
+  const wx = P.x - A.x;
+  const wy = P.y - A.y;
+
+  const vLen2 = vx * vx + vy * vy;
+  let t = 0;
+  if (vLen2 > 0) t = (wx * vx + wy * vy) / vLen2;
+  t = Math.max(0, Math.min(1, t));
+
+  const cx = A.x + t * vx;
+  const cy = A.y + t * vy;
+
+  const dx = P.x - cx;
+  const dy = P.y - cy;
+  return Math.sqrt(dx * dx + dy * dy);
+};
+
+const isPointNearPath = (p: [number, number], path: [number, number][], thresholdMeters = 100) => {
+  if (!path || path.length < 2) return false;
+  for (let i = 0; i < path.length - 1; i++) {
+    const a = path[i];
+    const b = path[i + 1];
+    const d = pointToSegmentDistanceMeters(p, a, b);
+    if (d <= thresholdMeters) return true;
+  }
+  return false;
+};
+
 export const LiveMap: React.FC = () => {
   const {
     source, setSource,
@@ -66,6 +115,12 @@ export const LiveMap: React.FC = () => {
   const [showNameDialog, setShowNameDialog] = useState(false);
   const [tempLocation, setTempLocation] = useState<{lat: number, lng: number} | null>(null);
   const [newLocationName, setNewLocationName] = useState('');
+
+  // Emergency vehicles & roadblocks for public map (to show when a route is selected)
+  const [emergencyVehicles, setEmergencyVehicles] = useState<any[]>([]);
+  const [roadblocks, setRoadblocks] = useState<any[]>([]);
+  const [onRouteVehicles, setOnRouteVehicles] = useState<any[]>([]);
+  const [onRouteRoadblocks, setOnRouteRoadblocks] = useState<any[]>([]);
   const navigate = useNavigate();
 
 
@@ -105,10 +160,81 @@ export const LiveMap: React.FC = () => {
       }
     };
 
+    const fetchEmergencyVehicles = async () => {
+      try {
+        const token = localStorage.getItem('traffic_token');
+        const res = await fetch('http://localhost:3000/api/emergency-vehicles', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const mapped = Array.isArray(data) ? data.map((row: any) => ({
+            id: row.id,
+            type: row.type,
+            identifier: row.identifier,
+            priority: row.priority,
+            lat: parseFloat(row.latitude ?? row.lat ?? 0),
+            lng: parseFloat(row.longitude ?? row.lng ?? 0),
+          })).filter((v: any) => !Number.isNaN(v.lat) && !Number.isNaN(v.lng)) : [];
+          setEmergencyVehicles(mapped);
+        }
+      } catch (e) {
+        console.error('Error loading emergency vehicles', e);
+      }
+    };
+
+    const fetchRoadblocks = async () => {
+      try {
+        const token = localStorage.getItem('traffic_token');
+        const res = await fetch('http://localhost:3000/api/roadblocks', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const mapped = Array.isArray(data) ? data.map((row: any) => ({
+            id: row.id,
+            reason: row.reason,
+            lat: parseFloat(row.latitude ?? row.lat ?? 0),
+            lng: parseFloat(row.longitude ?? row.lng ?? 0),
+          })).filter((v: any) => !Number.isNaN(v.lat) && !Number.isNaN(v.lng)) : [];
+          setRoadblocks(mapped);
+        }
+      } catch (e) { console.error('Error loading roadblocks', e); }
+    };
+
     fetchMarkers();
-    const interval = setInterval(fetchMarkers, 30000); // Reduced from 10s to 30s for better performance
+    fetchEmergencyVehicles();
+    fetchRoadblocks();
+
+    const interval = setInterval(() => {
+      fetchMarkers();
+      fetchEmergencyVehicles();
+      fetchRoadblocks();
+    }, 15000); // poll every 15s
+
     return () => clearInterval(interval);
-  }, []); // Only run once on mount (or if empty)
+  }, []);
+
+  // Compute vehicles and roadblocks that are near the selected route
+  useEffect(() => {
+    if (!selectedRoute) {
+      setOnRouteVehicles([]);
+      setOnRouteRoadblocks([]);
+      return;
+    }
+    const route = suggestedRoutes.find(r => r.id === selectedRoute);
+    if (!route) {
+      setOnRouteVehicles([]);
+      setOnRouteRoadblocks([]);
+      return;
+    }
+
+    const path = route.path as [number, number][];
+    const vehiclesOn = emergencyVehicles.filter(ev => isPointNearPath([ev.lat, ev.lng], path, 120));
+    const roadblocksOn = roadblocks.filter(rb => isPointNearPath([rb.lat, rb.lng], path, 120));
+    setOnRouteVehicles(vehiclesOn);
+    setOnRouteRoadblocks(roadblocksOn);
+  }, [selectedRoute, suggestedRoutes, emergencyVehicles, roadblocks]); // Only run once on mount (or if empty)
 
   // Fetch saved locations
   const fetchSavedLocations = async () => {
@@ -547,6 +673,8 @@ export const LiveMap: React.FC = () => {
     return null;
   };
 
+
+
   const handleInputChange = (value: string, type: 'source' | 'destination') => {
     if (type === 'source') {
       setSource(value);
@@ -754,7 +882,16 @@ export const LiveMap: React.FC = () => {
                     }`}
                   >
                     <div className="flex items-center justify-between mb-1">
-                      <span className="font-medium text-sm">{route.name}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-sm">{route.name}</span>
+                        {/* Inline counts for verification */}
+                        <span className="text-[11px] font-mono text-muted-foreground ml-2">
+                          {emergencyVehicles.filter(ev => isPointNearPath([ev.lat, ev.lng], route.path, 120)).length}🚑
+                        </span>
+                        <span className="text-[11px] font-mono text-muted-foreground ml-1">
+                          {roadblocks.filter(rb => isPointNearPath([rb.lat, rb.lng], route.path, 120)).length}🚧
+                        </span>
+                      </div>
                       <div className={`w-2 h-2 rounded-full ${getTrafficColor(route.traffic)}`} />
                     </div>
                     <div className="flex items-center gap-3 text-xs text-muted-foreground">
@@ -874,7 +1011,61 @@ export const LiveMap: React.FC = () => {
                 </Popup>
               </Marker>
             ))}
+
+            {/* Emergency vehicles and roadblocks along the selected route */}
+            {selectedRoute && onRouteVehicles.map(ev => (
+              <Marker
+                key={`ev-on-${ev.id}`}
+                position={[ev.lat, ev.lng]}
+                icon={divIcon({
+                  className: 'bg-transparent border-0',
+                  html: `<div class="w-8 h-8 rounded-full bg-rose-500 flex items-center justify-center text-white text-sm">${ev.type === 'firetruck' ? '🚒' : ev.type === 'police' ? '🚓' : '🚑'}</div>`,
+                  iconSize: [32, 32],
+                  iconAnchor: [16, 16]
+                })}
+              >
+                <Popup>
+                  <div className="min-w-[150px]">
+                    <div className="font-semibold">{(ev.type || '').toUpperCase()}</div>
+                    <div className="text-sm text-muted-foreground">{ev.identifier}</div>
+                    <div className="text-xs mt-2 text-muted-foreground">On selected route</div>
+                  </div>
+                </Popup>
+              </Marker>
+            ))}
+
+            {selectedRoute && onRouteRoadblocks.map(rb => (
+              <Marker
+                key={`rb-on-${rb.id}`}
+                position={[rb.lat, rb.lng]}
+                icon={divIcon({
+                  className: 'bg-transparent border-0',
+                  html: `<div class="w-8 h-8 rounded-full bg-yellow-500 flex items-center justify-center text-white text-sm">🚧</div>`,
+                  iconSize: [32, 32],
+                  iconAnchor: [16, 16]
+                })}
+              >
+                <Popup>
+                  <div className="min-w-[150px]">
+                    <div className="font-semibold">Roadblock</div>
+                    <div className="text-sm text-muted-foreground">{rb.reason}</div>
+                    <div className="text-xs mt-2 text-muted-foreground">On selected route</div>
+                  </div>
+                </Popup>
+              </Marker>
+            ))}
           </MapContainer>
+
+          {/* Debug overlay: shows counts for selected route (temporary) */}
+          {selectedRoute && (
+            <div className="absolute top-4 right-4 z-50 bg-background/80 backdrop-blur-sm border border-border rounded-md px-3 py-2 text-sm shadow-md">
+              <div className="flex items-center gap-3">
+                <div className="text-xs text-muted-foreground">On selected route:</div>
+                <div className="font-medium">{onRouteVehicles.length} 🚑</div>
+                <div className="font-medium">{onRouteRoadblocks.length} 🚧</div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Save Location Modal Overlay */}

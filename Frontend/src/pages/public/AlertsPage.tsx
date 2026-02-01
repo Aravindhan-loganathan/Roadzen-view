@@ -23,7 +23,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
 interface Alert {
-  id: number;
+  id: string | number;
   type: string;
   title: string;
   location: string;
