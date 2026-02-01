@@ -248,12 +248,20 @@ export const LiveDetection: React.FC = () => {
     const sendFrames = () => {
       if (ws.readyState !== WebSocket.OPEN) return;
 
-      // Only send frames if video is playing and not ended
+      const now = Date.now();
+      const lastSendTime = (ws as any)._lastSendTime || 0;
+      
+      // Limit to ~30 FPS (every 33ms) to take advantage of GPU speed
+      if (now - lastSendTime < 33) {
+        animationFrameId = requestAnimationFrame(sendFrames);
+        return;
+      }
+
       if (videoRef.current && !videoRef.current.paused && !videoRef.current.ended) {
         const video = videoRef.current;
         
-        // Maintain aspect ratio for model input (max 640)
-        const scale = 640 / video.videoWidth;
+        // Maintain aspect ratio for model input (max 480 as per backend optimization)
+        const scale = 480 / video.videoWidth;
         const w = Math.floor(video.videoWidth * scale);
         const h = Math.floor(video.videoHeight * scale);
 
@@ -269,12 +277,13 @@ export const LiveDetection: React.FC = () => {
         const ctx = offscreenCanvasRef.current.getContext('2d');
         if (ctx) {
           ctx.drawImage(video, 0, 0, w, h);
+          // 0.5 quality is perfectly fine for detection and faster to transmit
           offscreenCanvasRef.current.toBlob((blob) => {
-            // Prevent network congestion
             if (blob && ws.readyState === WebSocket.OPEN && ws.bufferedAmount === 0) {
               ws.send(blob);
+              (ws as any)._lastSendTime = now;
             }
-          }, 'image/jpeg', 0.6);
+          }, 'image/jpeg', 0.5);
         }
       }
       
@@ -428,7 +437,7 @@ export const LiveDetection: React.FC = () => {
                 <video
                   ref={videoRef}
                   src={videoSource}
-                  className="w-full h-full object-fill"
+                  className="w-full h-full object-contain"
                   playsInline
                   crossOrigin="anonymous"
                   muted={isMuted}

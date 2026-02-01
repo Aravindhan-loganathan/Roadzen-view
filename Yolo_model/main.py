@@ -1,12 +1,12 @@
 import asyncio
 import io
 import time
+import torch
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from ultralytics import YOLO
 import numpy as np
 import cv2
-from PIL import Image
 
 app = FastAPI()
 
@@ -20,13 +20,24 @@ app.add_middleware(
 )
 
 # Load the YOLO model
-# Ensure 'best.pt' is in the same directory or provide absolute path
 try:
-    model = YOLO("best.pt")
-    print("✅ Model 'best.pt' loaded successfully")
+    # Use GPU if available
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    model = YOLO("epoch10.pt")
+    
+    # Optimization: Fuse layers for faster inference
+    model.to(device)
+    if device == 'cuda':
+        model.model.fuse()
+        # Use half precision on GPU
+        model.model.half()
+        
+    # Pre-warm the model with a dummy frame
+    # We use the same size as our optimized inference (480)
+    model(np.zeros((480, 480, 3), dtype=np.uint8), verbose=False, imgsz=480)
+    print(f"✅ Model 'epoch10.pt' optimized for {device} (FP16: {device=='cuda'}) and warmed up.")
 except Exception as e:
-    print(f"⚠️ Could not load 'best.pt'. Downloading 'yolov8n.pt' as fallback...")
-    model = YOLO("yolov8n.pt")
+    print(f"⚠️ Could not optimize 'epoch10.pt'. Error: {e}")
 
 
 @app.get("/")
@@ -38,76 +49,92 @@ async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     print("Client connected")
     
+    # Tracker state is maintained by the YOLO model instance when persist=True
     try:
         while True:
             # 1. Receive image bytes from frontend
             data = await websocket.receive_bytes()
-            
             start_time = time.time()
             
-            # 2. Convert bytes to numpy array (OpenCV format)
-            image = Image.open(io.BytesIO(data))
-
-            # Check image mode and convert if necessary
-            if image.mode != "RGB":
-                image = image.convert("RGB")
-            frame = np.array(image)
+            # 2. Optimized: Direct decode to NumPy
+            nparr = np.frombuffer(data, np.uint8)
+            frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
             
-            # Convert RGB to BGR (YOLO/OpenCV expects BGR)
-            frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+            if frame is None:
+                continue
 
-            
-            # 3. Run Inference with Tracking (persist=True maintains IDs)
-            # Added conf=0.25 to ensure detections are returned (matches standard inference)
-            results = model.track(frame, persist=True, conf=0.25, verbose=False)
+            # 3. Run Inference with Tracking
+            # imgsz=640 provides much better box regression on vehicle fronts
+            results = model.track(
+                frame, 
+                persist=True, 
+                conf=0.25,     
+                iou=0.45,      # Adjusted for tighter box grouping
+                imgsz=640,     
+                tracker="custom_tracker.yaml", 
+                verbose=False,
+                half=(device == 'cuda') 
+            )
             
             detections = []
             
             # 4. Process Results
-            for result in results:
-                # boxes.xywhn returns [x_center, y_center, width, height] normalized 0-1
-                # boxes.cls returns class indices
-                # boxes.conf returns confidence scores
-                # boxes.id returns track IDs (if available)
-                
-                # Handle cases where no IDs are returned (detection only)
-                track_ids = result.boxes.id.int().cpu().tolist() if result.boxes.id is not None else [None] * len(result.boxes)
-                
-                for box, cls, conf, track_id in zip(result.boxes.xywhn, result.boxes.cls, result.boxes.conf, track_ids):
-                    x_center, y_center, w, h = box.tolist()
+            if results and len(results) > 0:
+                result = results[0]
+                if result.boxes is not None:
+                    # Fetching all required data to CPU once
+                    # xywhn: [x_center, y_center, width, height] normalized
+                    boxes = result.boxes.xywhn.cpu().numpy()
+                    classes = result.boxes.cls.cpu().numpy()
+                    confs = result.boxes.conf.cpu().numpy()
                     
-                    #Convert center coordinates to top-left corner
-                    x = x_center - (w / 2)
-                    y = y_center - (h / 2)
+                    # Handle track IDs (ByteTrack ensures these stay consistent)
+                    if result.boxes.id is not None:
+                        track_ids = result.boxes.id.int().cpu().numpy()
+                    else:
+                        track_ids = [None] * len(boxes)
                     
-                    label = result.names[int(cls)]
+                    names = result.names
                     
-                    det = {
-                        "label": label,
-                        "conf": float(conf),
-                        "box": [x, y, w, h]
-                    }
-                    
-                    if track_id is not None:
-                        det["id"] = track_id
+                    for i in range(len(boxes)):
+                        x_center, y_center, w, h = boxes[i]
                         
-                    detections.append(det)
+                        # Correct Bounding Box Logic: Convert center to Top-Left
+                        x = x_center - (w / 2)
+                        y = y_center - (h / 2)
+                        
+                        det = {
+                            "label": names[int(classes[i])],
+                            "conf": round(float(confs[i]), 2),
+                            "box": [float(x), float(y), float(w), float(h)]
+                        }
+                        
+                        if track_ids[i] is not None:
+                            det["id"] = int(track_ids[i])
+                            
+                        detections.append(det)
 
-            # Calculate FPS
+            # Calculate metrics
             process_time = time.time() - start_time
             fps = int(1 / process_time) if process_time > 0 else 30
 
             # 5. Send JSON response
-            await websocket.send_json({"detections": detections, "fps": fps})
+            await websocket.send_json({
+                "detections": detections, 
+                "fps": fps,
+                "latency_ms": int(process_time * 1000)
+            })
             
     except WebSocketDisconnect:
         print("Client disconnected")
     except Exception as e:
         print(f"Error: {e}")
-        await websocket.close()
-
+        try:
+            await websocket.close()
+        except:
+            pass
 
 if __name__ == "__main__":
     import uvicorn
-    # Run on port 8000 to match frontend config
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    # Use log_level='error' to reduce terminal overhead
+    uvicorn.run(app, host="0.0.0.0", port=8000, log_level="error")

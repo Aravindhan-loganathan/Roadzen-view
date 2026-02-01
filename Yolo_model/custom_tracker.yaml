@@ -1,0 +1,7 @@
+tracker_type: bytetrack
+track_high_thresh: 0.3  # Increase high threshold for better stability
+track_low_thresh: 0.1
+new_track_thresh: 0.4
+track_buffer: 30       # Faster cleanup for high-speed traffic
+match_thresh: 0.6       # Lowered from 0.8: much better for fast vehicles
+fuse_score: True
