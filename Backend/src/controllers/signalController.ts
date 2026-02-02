@@ -11,6 +11,7 @@ export const getSignals = async (req: Request, res: Response) => {
       name: signal.location,
       currentGreen: signal.current_green,
       countdown: signal.countdown,
+      status: signal.status,
       congestionLevel: signal.congestion_level.toLowerCase(),
       lat: signal.latitude ? parseFloat(signal.latitude) : null,
       lng: signal.longitude ? parseFloat(signal.longitude) : null
@@ -26,12 +27,12 @@ export const getSignals = async (req: Request, res: Response) => {
 // Optional: Endpoint to update a signal (useful for Admin control later)
 export const updateSignal = async (req: Request, res: Response) => {
   const { id } = req.params;
-  const { currentGreen, countdown, congestionLevel, name, lat, lng } = req.body;
+  const { currentGreen, countdown, congestionLevel, name, lat, lng, status } = req.body;
 
   try {
     await pool.query(
-      'UPDATE traffic_signals SET current_green = COALESCE($1, current_green), countdown = COALESCE($2, countdown), congestion_level = COALESCE($3, congestion_level), location = COALESCE($4, location), latitude = COALESCE($5, latitude), longitude = COALESCE($6, longitude), updated_at = NOW() WHERE id = $7',
-      [currentGreen, countdown, congestionLevel?.toUpperCase(), name, lat, lng, id]
+      'UPDATE traffic_signals SET current_green = COALESCE($1, current_green), countdown = COALESCE($2, countdown), congestion_level = COALESCE($3, congestion_level), location = COALESCE($4, location), latitude = COALESCE($5, latitude), longitude = COALESCE($6, longitude), status = COALESCE($7, status), updated_at = NOW() WHERE id = $8',
+      [currentGreen, countdown, congestionLevel?.toUpperCase(), name, lat, lng, status, id]
     );
     res.json({ message: 'Signal updated successfully' });
   } catch (error) {
@@ -55,6 +56,7 @@ export const createSignal = async (req: Request, res: Response) => {
       name: row.location,
       currentGreen: row.current_green,
       countdown: row.countdown,
+      status: row.status,
       congestionLevel: row.congestion_level ? row.congestion_level.toLowerCase() : 'low',
       lat: row.latitude !== null ? parseFloat(row.latitude) : null,
       lng: row.longitude !== null ? parseFloat(row.longitude) : null

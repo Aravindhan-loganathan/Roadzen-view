@@ -10,6 +10,7 @@ interface Signal {
   lat: number;
   lng: number;
   congestionLevel: 'low' | 'medium' | 'high';
+  status?: 'Red' | 'Yellow' | 'Green';
 }
 
 // Emergency Vehicle type from backend
@@ -460,6 +461,7 @@ export const AdminTrafficMap: React.FC = () => {
 
     // Poll emergency vehicle locations and roadblocks every 5s to simulate live movement
     const pollInterval = setInterval(() => {
+      fetchSignals(); // Added for instant map updates
       fetchEmergencyVehicles();
       fetchRoadblocks();
       fetchDashboardSummary();

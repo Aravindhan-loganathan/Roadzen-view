@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import {
   Radio,
@@ -19,9 +19,20 @@ export const SignalControl: React.FC = () => {
   const { state } = useLocation();
   const [autoMode, setAutoMode] = useState(true);
   const [signalTimer, setSignalTimer] = useState([30]);
-  const [selectedJunction, setSelectedJunction] = useState(state?.signalId || 1);
+  
+  // Persist selected junction ID
+  const [selectedJunction, setSelectedJunction] = useState<number>(() => {
+    if (state?.signalId) {
+      localStorage.setItem('lastSelectedSignalId', String(state.signalId));
+      return state.signalId;
+    }
+    const saved = localStorage.getItem('lastSelectedSignalId');
+    return saved ? parseInt(saved, 10) : 1;
+  });
+
   const [emergencyOverride, setEmergencyOverride] = useState(false);
   const [manualSignalState, setManualSignalState] = useState<'Red' | 'Yellow' | 'Green'>('Red');
+  const [fetchedData, setFetchedData] = useState<any>(null);
 
   // Live Detection Context
   const { 
@@ -33,6 +44,34 @@ export const SignalControl: React.FC = () => {
 
   const isDetectionActive = isModelActive || isLiveStreaming;
   const mockJunction = junctions.find(j => j.id === selectedJunction);
+
+  // Fetch signal data for persistence
+  useEffect(() => {
+    if (selectedJunction) {
+      localStorage.setItem('lastSelectedSignalId', String(selectedJunction));
+      
+      const fetchSignal = async () => {
+        try {
+           const token = localStorage.getItem('traffic_token');
+           const res = await fetch('http://localhost:3000/api/signals', {
+              headers: { Authorization: `Bearer ${token}` }
+           });
+           if(res.ok) {
+             const data = await res.json();
+             const found = data.find((s: any) => s.id === selectedJunction);
+             if (found) {
+                setFetchedData(found);
+                // Sync manual state if found
+                if (found.status && ['Red', 'Yellow', 'Green'].includes(found.status)) {
+                    setManualSignalState(found.status);
+                }
+             }
+           }
+        } catch(e) { console.error('Failed to fetch signal details', e); }
+      };
+      fetchSignal();
+    }
+  }, [selectedJunction]);
   
   // Resolve current state logic
   const resolveSignalState = () : 'Red' | 'Yellow' | 'Green' => {
@@ -46,7 +85,7 @@ export const SignalControl: React.FC = () => {
     if (isDetectionActive) return signalState;
     
     // Priority 4: Standard Mock/Nav Data (Auto Fallback)
-    const level = (state?.congestionLevel || mockJunction?.congestionLevel || 'low').toLowerCase();
+    const level = (state?.congestionLevel || fetchedData?.congestionLevel || mockJunction?.congestionLevel || 'low').toLowerCase();
     if (level === 'high') return 'Red';
     if (level === 'medium') return 'Yellow';
     return 'Green'; // Low congestion = Green
@@ -56,13 +95,49 @@ export const SignalControl: React.FC = () => {
 
   const currentJunction = {
     id: selectedJunction,
-    name: state?.signalName || mockJunction?.name || 'Traffic Junction',
+    name: state?.signalName || fetchedData?.name || mockJunction?.name || 'Traffic Junction',
     congestionLevel: isDetectionActive 
       ? liveCongestion 
-      : (state?.congestionLevel || mockJunction?.congestionLevel || 'low'),
+      : (state?.congestionLevel || fetchedData?.congestionLevel || mockJunction?.congestionLevel || 'low'),
     countdown: autoMode ? (mockJunction?.countdown || 30) : signalTimer[0], // Use slider in manual
-    currentGreen: mockJunction?.currentGreen || '--'
+    currentGreen: fetchedData?.currentGreen || mockJunction?.currentGreen || '--'
   };
+
+  // Sync with Backend
+  useEffect(() => {
+    const updateBackend = async () => {
+         try {
+             const token = localStorage.getItem('traffic_token');
+             
+             // Map signal state to congestion level for map display
+             let derivedCongestion: string;
+             if (currentActiveLight === 'Red') {
+               derivedCongestion = 'high';
+             } else if (currentActiveLight === 'Yellow') {
+               derivedCongestion = 'medium';
+             } else {
+               derivedCongestion = 'low';
+             }
+             
+             await fetch(`http://localhost:3000/api/signals/${selectedJunction}`, {
+                 method: 'PUT',
+                 headers: { 
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${token}`
+                 },
+                 body: JSON.stringify({
+                     status: currentActiveLight,
+                     congestionLevel: derivedCongestion
+                 })
+             });
+             console.log(`Synced signal ${selectedJunction}: ${currentActiveLight} -> ${derivedCongestion}`);
+         } catch(e) { console.error('Failed to sync signal state', e); }
+    };
+    
+    // Debounce to avoid excessive updates
+    const timer = setTimeout(updateBackend, 500); 
+    return () => clearTimeout(timer);
+  }, [currentActiveLight, selectedJunction]);
 
   return (
     <div className="space-y-6">
