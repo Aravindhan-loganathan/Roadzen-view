@@ -12,13 +12,13 @@ import { authMiddleware, adminOnly } from '../middleware/authMiddleware';
 const router = Router();
 
 // User routes
-router.post('/reports', authMiddleware, createReport);
-router.get('/reports/my', authMiddleware, getMyReports);
-router.delete('/reports/:id', authMiddleware, deleteReport);
+router.post('/', authMiddleware, createReport);
+router.get('/my', authMiddleware, getMyReports);
+router.delete('/:id', authMiddleware, deleteReport);
 
 // Admin routes
-router.get('/admin/reports', authMiddleware, adminOnly, getAllReports);
-router.patch('/reports/:id/status', authMiddleware, adminOnly, updateReportStatus);
+router.get('/admin', authMiddleware, adminOnly, getAllReports);
+router.patch('/:id/status', authMiddleware, adminOnly, updateReportStatus);
 
 
 export default router;

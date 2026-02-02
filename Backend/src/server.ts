@@ -22,7 +22,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Middleware
-app.use(cors({ origin: true, methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'], allowedHeaders: ['Content-Type', 'Authorization'] }));
+app.use(cors({ origin: true, methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'], allowedHeaders: ['Content-Type', 'Authorization'] }));
 // Handle preflight requests globally via middleware (avoids route pattern parser issues)
 app.use((req, res, next) => {
   if (req.method === 'OPTIONS') {
@@ -38,16 +38,16 @@ app.use(express.json());
 createTables();
 
 // Routes
-app.use('/api', signalRoutes);
+app.use('/api/signals', signalRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/alerts', alertRoutes);
-app.use('/api', reportRoutes);
-app.use('/api', violationRoutes);
-app.use('/api', emergencyVehicleRoutes);
+app.use('/api/reports', reportRoutes);
+app.use('/api/violations', violationRoutes);
+app.use('/api/emergency-vehicles', emergencyVehicleRoutes);
 app.use('/api/saved-locations', savedLocations);
 app.use('/api/settings', settingsRoutes);
-app.use('/api', roadBlocksRoutes);
+app.use('/api/roadblocks', roadBlocksRoutes);
 
 // Basic Route
 app.get('/', (req: Request, res: Response) => {
