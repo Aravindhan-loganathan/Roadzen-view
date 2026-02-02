@@ -11,6 +11,9 @@ import reportRoutes from './routes/reportRoutes';
 import violationRoutes from './routes/violationRoutes';
 import savedLocations from './routes/savedLocations';
 import settingsRoutes from './routes/settingsRoutes';
+import emergencyVehicleRoutes from './routes/emergencyVehicleRoutes';
+import roadBlocksRoutes from './routes/roadBlocksRoutes';
+
 
 // Load environment variables
 dotenv.config();
@@ -19,11 +22,11 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Middleware
-app.use(cors({ origin: true, methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], allowedHeaders: ['Content-Type', 'Authorization'] }));
+app.use(cors({ origin: true, methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'], allowedHeaders: ['Content-Type', 'Authorization'] }));
 // Handle preflight requests globally via middleware (avoids route pattern parser issues)
 app.use((req, res, next) => {
   if (req.method === 'OPTIONS') {
-    res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
+    res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
     res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
     return res.sendStatus(204);
   }
@@ -41,8 +44,10 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/alerts', alertRoutes);
 app.use('/api', reportRoutes);
 app.use('/api', violationRoutes);
+app.use('/api', emergencyVehicleRoutes);
 app.use('/api/saved-locations', savedLocations);
 app.use('/api/settings', settingsRoutes);
+app.use('/api', roadBlocksRoutes);
 
 // Basic Route
 app.get('/', (req: Request, res: Response) => {

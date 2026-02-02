@@ -677,7 +677,7 @@ ${fileName},${new Date().toISOString().split('T')[0]},Sample Data`;
                               <Button
                                 size="sm"
                                 variant="outline"
-                                className="text-xs border-green-200 hover:bg-green-50 text-green-700"
+                                className="text-xs border-green-500/50 text-green-600 hover:bg-green-600 hover:border-green-600 hover:text-white transition-all duration-200 shadow-sm"
                                 onClick={() => handleMarkAsCompleted(report.id)}
                                 disabled={handlingReportId === report.id}
                               >

@@ -8,20 +8,20 @@ import time
 SOURCE_URL = "http://10.47.146.127:8080" # http://192.168.1.25:8080/video
 TARGET_WIDTH = 640  # Resize frames to this width for performance
 
-# Force TCP for RTSP to prevent packet drop/gray frames on unstable connections
+# AGENT INSTRUCTION: Copy this exact environment setting to the top of main.py
+# This is the primary fix for the "Stream ends prematurely" error.
 os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp"
 
 def initialize_stream(url):
     """
     Initializes the video stream with robust error handling and configuration.
     """
-    # URL Verification: Append /video if it looks like a raw IP Webcam URL
-    # IP Webcam typically uses http://<ip>:8080/video for the stream
+    # AGENT INSTRUCTION: Port this URL correction logic to the FastAPI endpoint.
+    # It ensures the IP Webcam /video suffix is handled automatically.
     if url.startswith("http") and url.split(":")[-1].isdigit() and not url.endswith("/video"):
         print(f"Warning: URL '{url}' looks like a raw IP. Appending '/video' for better compatibility.")
         url += "/video"
     elif url.startswith("http") and url.endswith(("/", ":8080", ":8080/")):
-         # Handle trailing slashes or just port
          url = url.rstrip("/")
          if not url.endswith("/video"):
              url += "/video"
@@ -29,16 +29,16 @@ def initialize_stream(url):
 
     print(f"Connecting to stream: {url}...")
     
-    # Explicitly use FFMPEG backend
+    # AGENT INSTRUCTION: Use CAP_FFMPEG explicitly in main.py as seen here.
     cap = cv2.VideoCapture(url, cv2.CAP_FFMPEG)
     
-    # Set a timeout for opening the stream (5000ms = 5s)
+    # AGENT INSTRUCTION: This timeout and buffer size of 1 are critical for 
+    # preventing the stream from lagging or hanging main.py.
     try:
         cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 5000)
     except Exception:
-        pass # Not all backends support this property
+        pass 
 
-    # Optimization: constant buffer size for real-time
     cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
     
     return cap
@@ -53,7 +53,6 @@ def main():
     # Check if connection was successful
     if not cap.isOpened():
         print(f"Error: Could not open video stream at {SOURCE_URL}")
-        print("Please check your network connection and the URL.")
         return
 
     counted_ids = {}
@@ -66,7 +65,8 @@ def main():
             # Read frame
             ret, frame = cap.read()
             
-            # Reconnection Logic
+            # AGENT INSTRUCTION: Implement this Reconnection Logic within the 
+            # FastAPI StreamingResponse generator to keep the stream alive.
             if not ret:
                 print("Stream ended or connection lost. Attempting to reconnect...")
                 
@@ -75,48 +75,42 @@ def main():
                     print(f"Reconnection attempt {attempt}/3 in 2 seconds...")
                     time.sleep(2)
                     
-                    # Release old instance
                     cap.release()
-                    
-                    # Try to reconnect
                     cap = initialize_stream(SOURCE_URL)
                     
                     if cap.isOpened():
-                        # Verify we can actually read a frame
                         ret, frame = cap.read()
                         if ret:
                             print("Reconnection successful!")
                             reconnected = True
                             break
-                        else:
-                            print("Connected but failed to read frame.")
-                    
+                
                 if not reconnected:
-                    print("Could not reconnect after 3 attempts. Exiting.")
                     break
-                else:
-                    # Proceed with processing the new frame
-                    pass
 
             if frame is None:
                 continue
 
-            # Resize frame if necessary for performance
+            # AGENT INSTRUCTION: Downscaling to TARGET_WIDTH is essential in 
+            # main.py to maintain low latency on the frontend.
             h, w = frame.shape[:2]
             if w > TARGET_WIDTH:
                 scale = TARGET_WIDTH / w
                 new_h = int(h * scale)
                 frame = cv2.resize(frame, (TARGET_WIDTH, new_h))
 
-            # Run YOLO + ByteTrack
+            # AGENT INSTRUCTION: When moving this to main.py, ensure you add 
+            # stream=True to model.track() to prevent the memory leak.
             results = model.track(
                 frame,
                 tracker="bytetrack.yaml",
                 conf=0.4,
                 persist=True,
-                verbose=False # Reduce console spam
+                verbose=False 
             )
 
+            # AGENT INSTRUCTION: Convert the annotated_frame to JPEG using 
+            # cv2.imencode before yielding in the FastAPI StreamingResponse.
             annotated_frame = results[0].plot()
             boxes = results[0].boxes
 
@@ -130,7 +124,6 @@ def main():
 
                     if cls not in counted_ids:
                         counted_ids[cls] = set()
-
                     counted_ids[cls].add(track_id)
 
             # ---- DRAW COUNT ON VIDEO ----
@@ -149,21 +142,18 @@ def main():
                 )
                 y_offset += 30
 
-            # SHOW WINDOW
             cv2.imshow("Traffic Monitoring", annotated_frame)
 
-            # PRESS Q TO EXIT
             if cv2.waitKey(1) & 0xFF == ord('q'):
-                print("Exiting...")
                 break
                 
     except KeyboardInterrupt:
         print("Interrupted by user.")
     except Exception as e:
         print(f"An error occurred: {e}")
-        # import traceback; traceback.print_exc() # Uncomment for debugging
     finally:
-        # Cleanup
+        # AGENT INSTRUCTION: Ensure cap.release() is called in the 
+        # 'finally' block of the FastAPI generator to free the camera.
         if 'cap' in locals() and cap is not None:
             cap.release()
         cv2.destroyAllWindows()

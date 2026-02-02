@@ -41,6 +41,55 @@ const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => 
   return R * c; // Distance in km
 };
 
+// Distance in meters using haversine
+const haversineMeters = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+  return getDistance(lat1, lon1, lat2, lon2) * 1000;
+};
+
+// Calculate distance from point P to segment AB (meters) using equirectangular approx
+const pointToSegmentDistanceMeters = (p: [number, number], a: [number, number], b: [number, number]) => {
+  // reference latitude for scaling
+  const refLat = (a[0] + b[0]) / 2;
+  const toXY = (lat: number, lng: number) => {
+    const R = 6371000; // meters
+    const x = deg2rad(lng) * R * Math.cos(deg2rad(refLat));
+    const y = deg2rad(lat) * R;
+    return { x, y };
+  };
+
+  const P = toXY(p[0], p[1]);
+  const A = toXY(a[0], a[1]);
+  const B = toXY(b[0], b[1]);
+
+  const vx = B.x - A.x;
+  const vy = B.y - A.y;
+  const wx = P.x - A.x;
+  const wy = P.y - A.y;
+
+  const vLen2 = vx * vx + vy * vy;
+  let t = 0;
+  if (vLen2 > 0) t = (wx * vx + wy * vy) / vLen2;
+  t = Math.max(0, Math.min(1, t));
+
+  const cx = A.x + t * vx;
+  const cy = A.y + t * vy;
+
+  const dx = P.x - cx;
+  const dy = P.y - cy;
+  return Math.sqrt(dx * dx + dy * dy);
+};
+
+const isPointNearPath = (p: [number, number], path: [number, number][], thresholdMeters = 100) => {
+  if (!path || path.length < 2) return false;
+  for (let i = 0; i < path.length - 1; i++) {
+    const a = path[i];
+    const b = path[i + 1];
+    const d = pointToSegmentDistanceMeters(p, a, b);
+    if (d <= thresholdMeters) return true;
+  }
+  return false;
+};
+
 export const LiveMap: React.FC = () => {
   const {
     source, setSource,
@@ -66,6 +115,10 @@ export const LiveMap: React.FC = () => {
   const [showNameDialog, setShowNameDialog] = useState(false);
   const [tempLocation, setTempLocation] = useState<{lat: number, lng: number} | null>(null);
   const [newLocationName, setNewLocationName] = useState('');
+
+  // Emergency vehicles & roadblocks for public map
+  const [emergencyVehicles, setEmergencyVehicles] = useState<any[]>([]);
+  const [roadblocks, setRoadblocks] = useState<any[]>([]);
   const navigate = useNavigate();
 
 
@@ -73,7 +126,6 @@ export const LiveMap: React.FC = () => {
     // Only fetch if markers are empty (first load)
     if (markers.length > 0) {
       setLoading(false);
-      return;
     }
 
     const fetchMarkers = async () => {
@@ -105,10 +157,60 @@ export const LiveMap: React.FC = () => {
       }
     };
 
-    fetchMarkers();
-    const interval = setInterval(fetchMarkers, 30000); // Reduced from 10s to 30s for better performance
+    const fetchEmergencyVehicles = async () => {
+      try {
+        const token = localStorage.getItem('traffic_token');
+        const res = await fetch('http://localhost:3000/api/emergency-vehicles', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const mapped = Array.isArray(data) ? data.map((row: any) => ({
+            id: row.id,
+            type: row.type,
+            identifier: row.identifier,
+            priority: row.priority,
+            lat: parseFloat(row.latitude ?? row.lat ?? 0),
+            lng: parseFloat(row.longitude ?? row.lng ?? 0),
+          })).filter((v: any) => !Number.isNaN(v.lat) && !Number.isNaN(v.lng)) : [];
+          setEmergencyVehicles(mapped);
+        }
+      } catch (e) {
+        console.error('Error loading emergency vehicles', e);
+      }
+    };
+
+    const fetchRoadblocks = async () => {
+      try {
+        const token = localStorage.getItem('traffic_token');
+        const res = await fetch('http://localhost:3000/api/roadblocks', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const mapped = Array.isArray(data) ? data.map((row: any) => ({
+            id: row.id,
+            reason: row.reason,
+            lat: parseFloat(row.latitude ?? row.lat ?? 0),
+            lng: parseFloat(row.longitude ?? row.lng ?? 0),
+          })).filter((v: any) => !Number.isNaN(v.lat) && !Number.isNaN(v.lng)) : [];
+          setRoadblocks(mapped);
+        }
+      } catch (e) { console.error('Error loading roadblocks', e); }
+    };
+
+    if (markers.length === 0) fetchMarkers();
+    fetchEmergencyVehicles();
+    fetchRoadblocks();
+
+    const interval = setInterval(() => {
+      fetchMarkers();
+      fetchEmergencyVehicles();
+      fetchRoadblocks();
+    }, 15000); // poll every 15s
+
     return () => clearInterval(interval);
-  }, []); // Only run once on mount (or if empty)
+  }, []);
 
   // Fetch saved locations
   const fetchSavedLocations = async () => {
@@ -156,7 +258,7 @@ export const LiveMap: React.FC = () => {
       const lat = parseFloat(latParam);
       const lng = parseFloat(lngParam);
       setMapCenter([lat, lng]);
-      setMapZoom(16);
+      // Removed setMapZoom to prevent automatic zooming
       setSource(decodeURIComponent(locationParam));
     }
   }, [markers.length]); // Run when markers are loaded
@@ -236,9 +338,8 @@ export const LiveMap: React.FC = () => {
           const matchedSignals = markers
             .map(marker => {
               // Find the first point on the path that is close to this marker
-              // We use findIndex to get the position (sequence) of the match
               const matchIndex = path.findIndex((point: [number, number]) => 
-                getDistance(point[0], point[1], marker.lat, marker.lng) < 0.2 // Increased from 0.05 (50m) to 0.1 (100m)
+                getDistance(point[0], point[1], marker.lat, marker.lng) < 0.2
               );
               
               if (matchIndex !== -1) {
@@ -312,7 +413,7 @@ export const LiveMap: React.FC = () => {
         const { latitude, longitude } = position.coords;
         setUserLocation([latitude, longitude]);
         setMapCenter([latitude, longitude]);
-        setMapZoom(15);
+        // Removed setMapZoom to prevent automatic zooming on click
         setSource(`${latitude.toFixed(4)}, ${longitude.toFixed(4)}`);
         setLocationError(null);
       },
@@ -455,7 +556,7 @@ export const LiveMap: React.FC = () => {
     }
   };
 
-  // Pre-define and memoize the icons for each traffic level to avoid creating new objects on every render
+  // Pre-define and memoize the icons for each traffic level
   const trafficIcons = React.useMemo(() => {
     const createIcon = (traffic: string) => {
       const colorClass = getTrafficColor(traffic);
@@ -482,7 +583,7 @@ export const LiveMap: React.FC = () => {
     } as Record<string, any>;
   }, []);
 
-  // Custom icon for user location (memoized for performance)
+  // Custom icon for user location
   const userLocationIcon = React.useMemo(() => {
     const html = `
       <div class="relative flex items-center justify-center w-8 h-8">
@@ -521,17 +622,61 @@ export const LiveMap: React.FC = () => {
   const ChangeView = ({ center, zoom }: { center: [number, number], zoom: number }) => {
     const map = useMap();
     useEffect(() => {
-      map.setView(center, zoom);
-    }, [center[0], center[1], zoom]); // Only move when external center/zoom changes
+      // Only set view if coordinates are actually different to avoid redundant movement
+      const currentCenter = map.getCenter();
+      const currentZoom = map.getZoom();
+      const isSameCenter = Math.abs(currentCenter.lat - center[0]) < 0.0001 && Math.abs(currentCenter.lng - center[1]) < 0.0001;
+      const isSameZoom = currentZoom === zoom;
+      
+      if (!isSameCenter) {
+        // Use current map zoom to prevent resetting user's zoom level
+        map.setView(center, currentZoom);
+      } else if (!isSameZoom) {
+        map.setZoom(zoom);
+      }
+    }, [center[0], center[1], zoom]);
     return null;
   };
 
-  // Filter markers to show only those on the selected route
+  // Filter markers to show only those on the ALL suggested routes if no selected route, or just selected route
   const displayedMarkers = React.useMemo(() => {
-    if (!selectedRoute) return [];
-    const route = suggestedRoutes.find(r => r.id === selectedRoute);
-    return route ? markers.filter(m => route.signalIds.includes(m.id)) : [];
+    if (!suggestedRoutes || suggestedRoutes.length === 0) return [];
+    
+    if (selectedRoute) {
+        const route = suggestedRoutes.find(r => r.id === selectedRoute);
+        return route ? markers.filter(m => route.signalIds.includes(m.id)) : [];
+    }
+    
+    // If multiple routes, show signals for top 2 routes
+    const allRouteSignalIds = new Set<number>();
+    suggestedRoutes.slice(0, 2).forEach(r => {
+        r.signalIds.forEach(id => allRouteSignalIds.add(id));
+    });
+    return markers.filter(m => allRouteSignalIds.has(m.id));
   }, [selectedRoute, markers, suggestedRoutes]);
+
+  // Combined and filtered emergency vehicles and roadblocks
+  const displayedAlertMarkers = React.useMemo(() => {
+    if (!suggestedRoutes || suggestedRoutes.length === 0) return { evs: [], rbs: [] };
+    
+    // Get routes to check proximity against
+    const routesToCheck = selectedRoute 
+        ? [suggestedRoutes.find(r => r.id === selectedRoute)!] 
+        : suggestedRoutes.slice(0, 2);
+    
+    // Safety check if find returned undefined
+    if (routesToCheck.some(r => !r)) return { evs: [], rbs: [] };
+
+    const evOnRoutes = emergencyVehicles.filter(ev => 
+        routesToCheck.some(r => isPointNearPath([ev.lat, ev.lng], r.path, 150))
+    );
+    
+    const rbOnRoutes = roadblocks.filter(rb => 
+        routesToCheck.some(r => isPointNearPath([rb.lat, rb.lng], r.path, 150))
+    );
+    
+    return { evs: evOnRoutes, rbs: rbOnRoutes };
+  }, [emergencyVehicles, roadblocks, suggestedRoutes, selectedRoute]);
 
   if (loading) {
     return (
@@ -540,12 +685,6 @@ export const LiveMap: React.FC = () => {
       </div>
     );
   }
-
-  // Component to auto-fit the map to the selected route
-  // Fully disabled as per user request to avoid annoying automatic zooming
-  const FitBoundsToRoute = () => {
-    return null;
-  };
 
   const handleInputChange = (value: string, type: 'source' | 'destination') => {
     if (type === 'source') {
@@ -594,36 +733,31 @@ export const LiveMap: React.FC = () => {
           setDestination(coordString);
         }
       },
-      // Note: We don't sync moveend back to context here to avoid re-render loops during dragging
-      // unless specifically requested for sharing features. 
-      // If we need to sync, we should debounce it.
+      zoomend(e) {
+        // Sync state when user manually zooms
+        setMapZoom(e.target.getZoom());
+      },
+      moveend(e) {
+        // Sync state when user manually moves map
+        const center = e.target.getCenter();
+        setMapCenter([center.lat, center.lng]);
+      }
     });
-    return null;
-  };
-
-  // Component to handle recentering from navigation state (e.g. from Alerts page)
-  const RecenterMap = () => {
-    const map = useMap();
-    useEffect(() => {
-       // Only recenter if we are not showing routes (user manually moving map is fine otherwise)
-       // But if we have a saved center, maybe we just use that on initial mount?
-       // Let's rely on MapContainer center for initial, and moveend to save state
-    }, []);
     return null;
   };
 
   return (
     <div className="space-y-6">
-      {/* ... header ... */}
-      <div>
-        <h1 className="text-2xl md:text-3xl font-display font-bold">Live Traffic Map</h1>
-        <p className="text-muted-foreground mt-1">View real-time traffic conditions and find optimal routes</p>
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-display font-bold">Live Traffic Map</h1>
+          <p className="text-muted-foreground mt-1 text-sm">Real-time alerts, routing and congestion monitoring</p>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         {/* Sidebar Controls */}
         <div className="space-y-4">
-          {/* ... Search ... */}
           <div className="glow-card p-4 space-y-3">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -634,7 +768,7 @@ export const LiveMap: React.FC = () => {
                 onFocus={() => setActiveInput('source')}
                 className={`pl-10 ${activeInput === 'source' ? 'ring-2 ring-primary' : ''}`} />
               {sourceSuggestions.length > 0 && activeInput === 'source' && (
-                <div className="absolute z-10 w-full mt-1 bg-card border border-border rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                <div className="absolute z-50 w-full mt-1 bg-card border border-border rounded-lg shadow-lg max-h-48 overflow-y-auto">
                   {sourceSuggestions.map(marker => (
                     <div key={marker.id} onClick={() => selectSuggestion(marker, 'source')} className="p-2 hover:bg-muted cursor-pointer text-sm">
                       {marker.name}
@@ -653,7 +787,7 @@ export const LiveMap: React.FC = () => {
                 onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
                 className={`pl-10 ${activeInput === 'destination' ? 'ring-2 ring-primary' : ''}`} />
               {destinationSuggestions.length > 0 && activeInput === 'destination' && (
-                <div className="absolute z-10 w-full mt-1 bg-card border border-border rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                <div className="absolute z-50 w-full mt-1 bg-card border border-border rounded-lg shadow-lg max-h-48 overflow-y-auto">
                   {destinationSuggestions.map(marker => (
                     <div key={marker.id} onClick={() => selectSuggestion(marker, 'destination')} className="p-2 hover:bg-muted cursor-pointer text-sm">
                       {marker.name}
@@ -670,242 +804,198 @@ export const LiveMap: React.FC = () => {
               {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Navigation className="w-4 h-4" />}
               {isSearching ? 'Finding Routes...' : 'Find Route'}
             </Button>
-            <Button 
-              variant="outline"
-              className="w-full gap-2" 
-              onClick={handleLocateMe}
-            >
-              <Locate className="w-4 h-4" />
-              Use My Location
-            </Button>
-            <Button 
-              variant="outline"
-              className="w-full gap-2" 
-              onClick={handleShareRoute}
-              disabled={!source.trim() || !destination.trim()}
-            >
-              <Share2 className="w-4 h-4" />
-              Share Route
-            </Button>
-            <Button 
-              variant={isSavingLocation ? "default" : "outline"}
-              className={`w-full gap-2 ${isSavingLocation ? 'ring-2 ring-primary animate-pulse' : ''}`}
-              onClick={() => setIsSavingLocation(!isSavingLocation)}
-            >
-              <Save className="w-4 h-4" />
-              {isSavingLocation ? 'Click Map to Save' : 'Save Location'}
-            </Button>
-            {locationError && (
-              <div className="text-xs text-destructive bg-destructive/10 p-2 rounded border border-destructive/20">
-                {locationError}
-              </div>
-            )}
-            {shareSuccess && (
-              <div className="text-xs text-success bg-success/10 p-2 rounded border border-success/20">
-                {shareSuccess}
-              </div>
-            )}
-          </div>
-
-          {/* Traffic Legend */}
-          <div className="glow-card p-4">
-            <h3 className="font-semibold mb-3">Traffic Legend</h3>
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded-full bg-success" />
-                <span className="text-sm">Low Traffic</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded-full bg-warning" />
-                <span className="text-sm">Medium Traffic</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded-full bg-destructive" />
-                <span className="text-sm">Heavy Traffic</span>
-              </div>
+            <div className="grid grid-cols-2 gap-2">
+                <Button variant="outline" size="sm" onClick={handleLocateMe} className="gap-2 text-xs">
+                    <Locate className="w-3.5 h-3.5" /> Me
+                </Button>
+                <Button variant="outline" size="sm" onClick={handleShareRoute} className="gap-2 text-xs">
+                    <Share2 className="w-3.5 h-3.5" /> Share
+                </Button>
             </div>
           </div>
 
-          {/* Suggested Routes */}
+          {/* Suggested Routes Section */}
           {showRoutes && (
-          <div className="glow-card p-4 animate-fade-in">
-            <div className="flex justify-between items-center mb-3">
-                <h3 className="font-semibold flex items-center gap-2">
-                <Route className="w-4 h-4" />
-                Suggested Routes
-                </h3>
-            </div>
-            
-            {suggestedRoutes.some(r => r.traffic === 'heavy') && (
-               <div className="mb-3 p-2 bg-destructive/10 border border-destructive/20 rounded text-xs text-destructive flex items-center gap-2">
-                 <AlertTriangle className="w-3 h-3" />
-                 High congestion detected.
-               </div>
-            )}
+          <div className="glow-card p-4 animate-fade-in max-h-[400px] overflow-y-auto">
+            <h3 className="font-semibold flex items-center gap-2 mb-3">
+                <Route className="w-4 h-4" /> Suggested Routes
+            </h3>
             <div className="space-y-2">
               {suggestedRoutes.map((route) => (
-                <div key={route.id} className="space-y-2">
-                  <button
-                    onClick={() => setSelectedRoute(route.id)}
-                    className={`w-full p-3 rounded-lg text-left transition-all ${
-                      selectedRoute === route.id
-                        ? 'bg-primary/10 border border-primary'
-                        : 'bg-muted/50 hover:bg-muted'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="font-medium text-sm">{route.name}</span>
-                      <div className={`w-2 h-2 rounded-full ${getTrafficColor(route.traffic)}`} />
-                    </div>
-                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <Clock className="w-3 h-3" />
-                        {route.time}
-                        {route.penalty !== undefined && route.penalty > 0 && (
-                          <span className="text-destructive font-medium ml-1">
-                            (+{route.penalty}m)
-                          </span>
-                        )}
-                      </span>
-                      <span>{route.distance}</span>
-                    </div>
-                  </button>
-                </div>
+                <button
+                  key={route.id}
+                  onClick={() => setSelectedRoute(route.id)}
+                  className={`w-full p-3 rounded-lg text-left transition-all ${
+                    selectedRoute === route.id ? 'bg-primary/10 border border-primary' : 'bg-muted/50 hover:bg-muted border border-transparent'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="font-bold text-sm">{route.name}</span>
+                    <div className={`w-2 h-2 rounded-full ${getTrafficColor(route.traffic)}`} />
+                  </div>
+                  <div className="flex items-center gap-3 text-[11px] text-muted-foreground font-medium">
+                    <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {route.time}</span>
+                    <span>{route.distance}</span>
+                  </div>
+                </button>
               ))}
             </div>
-            
-            <Button 
-                variant="outline"
-                className="w-full mt-4 gap-2"
-                onClick={handleViewAllRouteSignals}
-            >
-                View Detailed Status for All Routes
-                <ArrowRight className="w-4 h-4" />
-            </Button>
+            <Button variant="link" className="w-full mt-2 text-xs" onClick={handleViewAllRouteSignals}>Detailed Status <ArrowRight className="w-3 h-3 ml-1" /></Button>
           </div>
           )}
+
+          {/* Map Legend */}
+          <div className="glow-card p-4">
+            <h3 className="text-sm font-bold mb-4 flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-warning" /> Map Legend
+            </h3>
+            
+            <div className="space-y-4">
+              {/* Alerts Section */}
+              <div className="space-y-3">
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">Active Alerts</p>
+                <div className="grid gap-2">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-rose-500 border-2 border-white shadow-sm flex items-center justify-center text-sm">🚑</div>
+                    <span className="text-xs font-medium">Emergency Vehicle</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-yellow-500 border-2 border-white shadow-sm flex items-center justify-center text-sm">🚧</div>
+                    <span className="text-xs font-medium">Roadblock</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Traffic Section */}
+              <div className="space-y-3">
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">Signal Traffic</p>
+                <div className="grid gap-2">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 flex items-center justify-center">
+                      <div className="relative w-3 h-3 rounded-full bg-success">
+                        <div className="absolute inset-0 rounded-full bg-success animate-ping opacity-75" />
+                      </div>
+                    </div>
+                    <span className="text-xs font-medium">Low Traffic</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 flex items-center justify-center">
+                      <div className="relative w-3 h-3 rounded-full bg-warning">
+                        <div className="absolute inset-0 rounded-full bg-warning animate-ping opacity-75" />
+                      </div>
+                    </div>
+                    <span className="text-xs font-medium">Moderate Traffic</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 flex items-center justify-center">
+                      <div className="relative w-3 h-3 rounded-full bg-destructive">
+                        <div className="absolute inset-0 rounded-full bg-destructive animate-ping opacity-75" />
+                      </div>
+                    </div>
+                    <span className="text-xs font-medium">Heavy Traffic</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Map Container */}
-        <div className="lg:col-span-3 glow-card overflow-hidden min-h-[500px] lg:min-h-[600px] relative">
-          <MapContainer 
-            center={mapCenter} 
-            zoom={mapZoom} 
-            scrollWheelZoom="center"
-            dragging={true}
-            doubleClickZoom={false}
-            touchZoom={true}
-            className="w-full h-full"
-            style={{ width: '100%', height: '100%' }}
-          >
+        <div className="lg:col-span-3 glow-card overflow-hidden min-h-[500px] lg:min-h-[650px] relative border-white/5 shadow-2xl">
+          <MapContainer center={mapCenter} zoom={mapZoom} className="w-full h-full z-0">
             <ChangeView center={mapCenter} zoom={mapZoom} />
             <MapClickHandler />
-            <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            />
-            <FitBoundsToRoute />
-            {selectedRoute && (() => {
-              const route = suggestedRoutes.find(r => r.id === selectedRoute);
-              if (!route) return null;
-              return (
+            <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+            
+            {/* Render Routes */}
+            {(selectedRoute ? suggestedRoutes.filter(r => r.id === selectedRoute) : suggestedRoutes.slice(0, 2)).map(route => (
                 <Polyline 
-                  key={`route-${route.id}-${route.traffic}`}
-                  positions={route.path}
-                  color={getTrafficHexColor(route.traffic)}
-                  weight={6}
-                  opacity={0.8}
-                  lineJoin="round"
-                  lineCap="round"
+                    key={`route-${route.id}`}
+                    positions={route.path}
+                    color={getTrafficHexColor(route.traffic)}
+                    weight={selectedRoute === route.id ? 8 : 4}
+                    opacity={selectedRoute === route.id ? 0.9 : 0.4}
                 />
-              );
-            })()}
-            {userLocation && (
-              <Marker position={userLocation} icon={userLocationIcon}>
+            ))}
+
+            {/* Signal Markers */}
+            {displayedMarkers.map(marker => (
+              <Marker key={marker.id} position={[marker.lat, marker.lng]} icon={trafficIcons[marker.traffic.toLowerCase()] || trafficIcons.low}>
                 <Popup>
-                  <div className="font-sans">
-                    <p className="font-semibold">Your Location</p>
-                    <p className="text-sm text-muted-foreground">Current position</p>
-                  </div>
-                </Popup>
-              </Marker>
-            )}
-            {savedLocations.map(loc => (
-              <Marker 
-                key={`saved-${loc.id}`} 
-                position={[loc.latitude, loc.longitude]} 
-                icon={savedLocationIcon}
-              >
-                <Popup>
-                  <div className="font-sans min-w-[150px]">
-                    <p className="font-bold text-base mb-1">{loc.name}</p>
-                    <p className="text-xs text-muted-foreground mb-3">Saved Location</p>
-                    <Button 
-                      variant="destructive" 
-                      size="sm" 
-                      className="w-full h-8 text-xs"
-                      onClick={() => handleDeleteLocation(loc.id)}
-                    >
-                      <Trash2 className="w-3 h-3 mr-2" />
-                      Delete
-                    </Button>
+                  <div className="p-1">
+                    <p className="font-bold">{marker.name}</p>
+                    <p className="text-xs capitalize">{marker.traffic} Traffic</p>
                   </div>
                 </Popup>
               </Marker>
             ))}
-            {displayedMarkers.map(marker => (
-              <Marker 
-                key={marker.id} 
-                position={[marker.lat, marker.lng]} 
-                icon={trafficIcons[marker.traffic.toLowerCase()] || trafficIcons.low}
+
+            {/* Alert Markers (Emergency & Roadblocks) */}
+            {displayedAlertMarkers.evs.map(ev => (
+              <Marker
+                key={`ev-${ev.id}`}
+                position={[ev.lat, ev.lng]}
+                icon={divIcon({
+                  className: 'bg-transparent',
+                  html: `<div class="w-8 h-8 rounded-full bg-rose-500 border-2 border-white shadow-lg flex items-center justify-center text-lg animate-bounce-subtle">${ev.type === 'firetruck' ? '🚒' : '🚑'}</div>`,
+                  iconSize: [32, 32],
+                  iconAnchor: [16, 16]
+                })}
               >
+                <Popup><div className="font-bold">{(ev.type || '').toUpperCase()}</div><div className="text-xs">{ev.identifier}</div></Popup>
+              </Marker>
+            ))}
+            {displayedAlertMarkers.rbs.map(rb => (
+              <Marker
+                key={`rb-${rb.id}`}
+                position={[rb.lat, rb.lng]}
+                icon={divIcon({
+                  className: 'bg-transparent',
+                  html: `<div class="w-8 h-8 rounded-full bg-yellow-500 border-2 border-white shadow-lg flex items-center justify-center text-lg">🚧</div>`,
+                  iconSize: [32, 32],
+                  iconAnchor: [16, 16]
+                })}
+              >
+                <Popup><div className="font-bold">Roadblock</div><div className="text-xs">{rb.reason}</div></Popup>
+              </Marker>
+            ))}
+
+            {/* User & Saved Locations */}
+            {userLocation && <Marker position={userLocation} icon={userLocationIcon} />}
+            {savedLocations.map(loc => (
+              <Marker key={`saved-${loc.id}`} position={[loc.latitude, loc.longitude]} icon={savedLocationIcon}>
                 <Popup>
-                  <div className="font-sans">
-                    <p className="font-semibold">{marker.name}</p>
-                    <p className="text-sm text-muted-foreground capitalize mb-2">{marker.traffic} traffic</p>
-                    <button
-                      onClick={() => handleShareLocation(marker.lat, marker.lng, marker.name)}
-                      className="flex items-center gap-1 text-xs text-primary hover:underline"
-                    >
-                      <Share2 className="w-3 h-3" />
-                      Share Location
-                    </button>
-                  </div>
+                    <div className="p-2">
+                        <p className="font-bold mb-2">{loc.name}</p>
+                        <Button variant="destructive" size="sm" className="h-7 text-[10px] w-full" onClick={() => handleDeleteLocation(loc.id)}>Delete</Button>
+                    </div>
                 </Popup>
               </Marker>
             ))}
           </MapContainer>
+          
+          <Button 
+            className="absolute bottom-6 right-6 z-[400] rounded-full w-12 h-12 p-0 shadow-2xl gradient-bg"
+            onClick={handleLocateMe}
+          >
+            <Locate className="w-5 h-5" />
+          </Button>
         </div>
+      </div>
 
-        {/* Save Location Modal Overlay */}
-        {showNameDialog && (
-          <div className="absolute inset-0 z-[1000] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-            <div className="bg-background p-6 rounded-lg shadow-xl w-full max-w-sm border border-border animate-in fade-in zoom-in duration-200">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="font-bold text-lg">Save Location</h3>
-                <button onClick={cancelSaveLocation} className="text-muted-foreground hover:text-foreground">
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-              <p className="text-sm text-muted-foreground mb-4">
-                Enter a name for this location to save it to your map.
-              </p>
-              <Input 
-                value={newLocationName} 
-                onChange={e => setNewLocationName(e.target.value)}
-                placeholder="e.g., Home, Office, Gym"
-                className="mb-4"
-                autoFocus
-                onKeyDown={(e) => e.key === 'Enter' && confirmSaveLocation()}
-              />
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={cancelSaveLocation}>Cancel</Button>
-                <Button onClick={confirmSaveLocation} disabled={!newLocationName.trim()}>Save Location</Button>
+      {/* Save Location Modal */}
+      {showNameDialog && (
+          <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/60 backdrop-blur-md">
+            <div className="bg-card p-6 rounded-2xl shadow-2xl w-full max-w-sm border border-white/10 animate-fade-in">
+              <h3 className="font-bold text-xl mb-4">Save Location</h3>
+              <Input value={newLocationName} onChange={e => setNewLocationName(e.target.value)} placeholder="e.g. Home, Office" className="mb-6 h-12" autoFocus />
+              <div className="flex gap-3">
+                <Button variant="outline" onClick={cancelSaveLocation} className="flex-1">Cancel</Button>
+                <Button onClick={confirmSaveLocation} disabled={!newLocationName.trim()} className="flex-1 gradient-bg">Save</Button>
               </div>
             </div>
           </div>
-        )}
-      </div>
+      )}
     </div>
   );
 };
