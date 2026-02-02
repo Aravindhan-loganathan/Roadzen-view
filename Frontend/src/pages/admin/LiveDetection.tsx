@@ -18,11 +18,13 @@ import {
   WifiOff,
   FileVideo,
   Settings,
+  Tv,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
+import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 
@@ -44,7 +46,7 @@ interface VehicleCounts {
 const initialCounts: VehicleCounts = { car: 0, bike: 0, bus: 0, truck: 0, auto: 0 };
 
 export const LiveDetection: React.FC = () => {
-  // Video State
+  // Video State (Offline)
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(true);
   const [progress, setProgress] = useState(0);
@@ -52,8 +54,13 @@ export const LiveDetection: React.FC = () => {
   const [videoSource, setVideoSource] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
 
-  // Detection State
-  const [isModelActive, setIsModelActive] = useState(false);
+  // Online / Mode State
+  const [isOnline, setIsOnline] = useState(false);
+  const [liveUrl, setLiveUrl] = useState(''); // Stores the input URL
+  const [isLiveStreaming, setIsLiveStreaming] = useState(false); // Controls <img src>
+
+  // General Detection State
+  const [isModelActive, setIsModelActive] = useState(false); // used for offline toggle
   const [fps, setFps] = useState(0);
   const [detections, setDetections] = useState<Detection[]>([]);
 
@@ -69,13 +76,75 @@ export const LiveDetection: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const seenIds = useRef<Set<number>>(new Set());
-  const totalCountsRef = useRef<VehicleCounts>(initialCounts); // Ref to avoid dependency loops
+  const totalCountsRef = useRef<VehicleCounts>(initialCounts);
   const idMapping = useRef<Map<number, number>>(new Map());
   const nextId = useRef(1);
 
   const { toast } = useToast();
 
-  // --- Video Handlers ---
+  // --- Helpers ---
+  const resetStats = () => {
+    setDetections([]);
+    setCurrentCounts(initialCounts);
+    setTotalCounts(initialCounts);
+    totalCountsRef.current = initialCounts;
+    seenIds.current.clear();
+    idMapping.current.clear();
+    nextId.current = 1;
+    setFps(0);
+  };
+
+  const getClassColor = (label: string) => {
+    switch (label.toLowerCase()) {
+      case 'car': return '#3b82f6';
+      case 'bike':
+      case 'motorcycle': return '#22c55e';
+      case 'bus': return '#eab308';
+      case 'truck': return '#64748b';
+      case 'auto':
+      case 'rickshaw': return '#ef4444';
+      default: return '#3b82f6';
+    }
+  };
+
+  const updateStats = (dataDetections: Detection[]) => {
+    const current = { ...initialCounts };
+    let newUniqueDetected = false;
+    const newTotal = { ...totalCountsRef.current };
+
+    dataDetections.forEach((det: Detection) => {
+      const label = det.label.toLowerCase();
+      let key: keyof VehicleCounts | undefined;
+
+      if (label === 'motorcycle' || label === 'bike') key = 'bike';
+      else if (label === 'auto' || label === 'rickshaw') key = 'auto';
+      else if (['car', 'bus', 'truck'].includes(label)) key = label as keyof VehicleCounts;
+
+      let displayId = det.id;
+      if (det.id !== undefined) {
+        if (!idMapping.current.has(det.id)) {
+          idMapping.current.set(det.id, nextId.current++);
+        }
+        displayId = idMapping.current.get(det.id);
+        det.id = displayId;
+      }
+
+      if (key && current[key] !== undefined) current[key]++;
+      if (displayId !== undefined && !seenIds.current.has(displayId)) {
+        seenIds.current.add(displayId);
+        if (key && newTotal[key] !== undefined) newTotal[key]++;
+        newUniqueDetected = true;
+      }
+    });
+
+    setCurrentCounts(current);
+    if (newUniqueDetected) {
+      setTotalCounts(newTotal);
+      totalCountsRef.current = newTotal;
+    }
+  };
+
+  // --- Offline Mode Logic ---
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -95,94 +164,109 @@ export const LiveDetection: React.FC = () => {
   const handleClearVideo = () => {
     if (videoSource) {
       URL.revokeObjectURL(videoSource);
-      setVideoSource(null);
-      resetStats();
-      setIsPlaying(false);
-      setIsModelActive(false);
     }
+    setVideoSource(null);
+    resetStats();
+    setIsPlaying(false);
+    setIsModelActive(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
-  };
-
-  const resetStats = () => {
-    setDetections([]);
-    setCurrentCounts(initialCounts);
-    setTotalCounts(initialCounts);
-    totalCountsRef.current = initialCounts;
-    seenIds.current.clear();
-    idMapping.current.clear();
-    nextId.current = 1;
-    setFps(0);
   };
 
   const togglePlay = () => {
     if (videoRef.current) {
-      if (isPlaying) {
-        videoRef.current.pause();
-      } else {
-        videoRef.current.play();
-      }
+      if (isPlaying) videoRef.current.pause();
+      else videoRef.current.play();
       setIsPlaying(!isPlaying);
     }
   };
 
-  const toggleMute = () => {
-    if (videoRef.current) {
-      videoRef.current.muted = !isMuted;
-      setIsMuted(!isMuted);
-    }
-  };
-
-  const handleTimeUpdate = () => {
-    if (videoRef.current) {
-      const curr = videoRef.current.currentTime;
-      const dur = videoRef.current.duration;
-      setCurrentTime(curr);
-      if (dur > 0) {
-        setProgress((curr / dur) * 100);
-      }
-    }
-  };
-
-  const handleSeek = (value: number[]) => {
-    if (videoRef.current) {
-      const newTime = (value[0] / 100) * videoRef.current.duration;
-      videoRef.current.currentTime = newTime;
-      setProgress(value[0]);
-    }
-  };
-
-  const handleVideoLoaded = () => {
-    if (videoRef.current) {
-      setDuration(videoRef.current.duration);
-    }
-  };
-
-  const handleVideoEnded = () => {
-    setIsPlaying(false);
-  };
-
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  // --- Canvas Drawing ---
-
-  const getClassColor = (label: string) => {
-    switch (label.toLowerCase()) {
-      case 'car': return '#3b82f6'; // primary
-      case 'bike':
-      case 'motorcycle': return '#22c55e'; // success
-      case 'bus': return '#eab308'; // warning
-      case 'truck': return '#64748b'; // muted
-      case 'auto':
-      case 'rickshaw': return '#ef4444'; // destructive
-      default: return '#3b82f6';
-    }
-  };
-
+  // Offline: WebSocket & Inference Loop
   useEffect(() => {
+    if (isOnline) return; // Do not run offline logic if isOnline is true
+
+    if (!isModelActive) {
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+      return;
+    }
+
+    const ws = new WebSocket('ws://localhost:8000/ws/detection'); // Keep original offline endpoint
+    wsRef.current = ws;
+    let animationFrameId: number;
+
+    ws.onopen = () => {
+      console.log('Connected to Offline Model Stream');
+      sendFrames();
+    };
+
+    const sendFrames = () => {
+      if (ws.readyState !== WebSocket.OPEN) return;
+
+      const now = Date.now();
+      const lastSendTime = (ws as any)._lastSendTime || 0;
+
+      // Limit to ~30 FPS
+      if (now - lastSendTime < 33) {
+        animationFrameId = requestAnimationFrame(sendFrames);
+        return;
+      }
+
+      if (videoRef.current && !videoRef.current.paused && !videoRef.current.ended) {
+        const video = videoRef.current;
+        // Optimization: limit resolution sent to backend
+        const scale = 480 / video.videoWidth;
+        const w = Math.floor(video.videoWidth * scale);
+        const h = Math.floor(video.videoHeight * scale);
+
+        if (!offscreenCanvasRef.current) {
+          offscreenCanvasRef.current = document.createElement('canvas');
+        }
+
+        if (offscreenCanvasRef.current.width !== w || offscreenCanvasRef.current.height !== h) {
+          offscreenCanvasRef.current.width = w;
+          offscreenCanvasRef.current.height = h;
+        }
+
+        const ctx = offscreenCanvasRef.current.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(video, 0, 0, w, h);
+          offscreenCanvasRef.current.toBlob((blob) => {
+            if (blob && ws.readyState === WebSocket.OPEN && ws.bufferedAmount === 0) {
+              ws.send(blob);
+              (ws as any)._lastSendTime = now;
+            }
+          }, 'image/jpeg', 0.5);
+        }
+      }
+
+      animationFrameId = requestAnimationFrame(sendFrames);
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.detections) {
+          setDetections(data.detections);
+          updateStats(data.detections);
+        }
+        if (data.fps) setFps(data.fps);
+      } catch (e) {
+        console.error('Error parsing detection data', e);
+      }
+    };
+
+    return () => {
+      if (ws.readyState === WebSocket.OPEN) ws.close();
+      if (animationFrameId) cancelAnimationFrame(animationFrameId);
+    };
+  }, [isModelActive, isOnline]);
+
+  // Offline: Canvas Drawing Effect
+  useEffect(() => {
+    if (isOnline) return; // Only for offline mode
+
     const canvas = canvasRef.current;
     const container = containerRef.current;
     if (!canvas || !container) return;
@@ -222,186 +306,37 @@ export const LiveDetection: React.FC = () => {
       ctx.font = '12px sans-serif';
       ctx.fillText(text, sx + 5, sy - 6);
     });
-  }, [detections]);
+  }, [detections, isOnline]);
 
-  // --- WebSocket & Inference ---
 
-  useEffect(() => {
-    if (!isModelActive) {
-      if (wsRef.current) {
-        wsRef.current.close();
-        wsRef.current = null;
-      }
-      return;
-    }
+  // --- Online Mode Logic ---
 
-    const ws = new WebSocket('ws://localhost:8000/ws/detection');
-    wsRef.current = ws;
-    let animationFrameId: number;
-
-    ws.onopen = () => {
-      toast({ title: "Connected", description: "Streaming to inference server..." });
-      sendFrames();
-    };
-
-    const sendFrames = () => {
-      if (ws.readyState !== WebSocket.OPEN) return;
-
-      const now = Date.now();
-      const lastSendTime = (ws as any)._lastSendTime || 0;
-
-      // Limit to ~30 FPS (every 33ms) to take advantage of GPU speed
-      if (now - lastSendTime < 33) {
-        animationFrameId = requestAnimationFrame(sendFrames);
+  const handleStartStopLive = () => {
+    if (isLiveStreaming) {
+      // Stop
+      setIsLiveStreaming(false);
+      // setDetections([]); // Optional: keep last frame? better to clear 
+      setFps(0);
+    } else {
+      // Start
+      if (!liveUrl) {
+        toast({ title: "Error", description: "Please enter a valid RTSP/HTTP URL", variant: "destructive" });
         return;
       }
+      // resetStats(); // Maybe don't reset total stats? User choice. Let's reset for fresh start.
+      resetStats();
+      setIsLiveStreaming(true);
+    }
+  };
 
-      if (videoRef.current && !videoRef.current.paused && !videoRef.current.ended) {
-        const video = videoRef.current;
+  // Effect to clean up streaming state if we toggle Offline
+  useEffect(() => {
+    if (!isOnline) {
+      setIsLiveStreaming(false);
+    }
+  }, [isOnline]);
 
-        // Maintain aspect ratio for model input (max 480 as per backend optimization)
-        const scale = 480 / video.videoWidth;
-        const w = Math.floor(video.videoWidth * scale);
-        const h = Math.floor(video.videoHeight * scale);
-
-        if (!offscreenCanvasRef.current) {
-          offscreenCanvasRef.current = document.createElement('canvas');
-        }
-
-        if (offscreenCanvasRef.current.width !== w || offscreenCanvasRef.current.height !== h) {
-          offscreenCanvasRef.current.width = w;
-          offscreenCanvasRef.current.height = h;
-        }
-
-        const ctx = offscreenCanvasRef.current.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(video, 0, 0, w, h);
-          // 0.5 quality is perfectly fine for detection and faster to transmit
-          offscreenCanvasRef.current.toBlob((blob) => {
-            if (blob && ws.readyState === WebSocket.OPEN && ws.bufferedAmount === 0) {
-              ws.send(blob);
-              (ws as any)._lastSendTime = now;
-            }
-          }, 'image/jpeg', 0.5);
-        }
-      }
-
-      animationFrameId = requestAnimationFrame(sendFrames);
-    };
-
-    ws.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-
-        if (data.detections) {
-          setDetections(data.detections);
-
-          // Calculate stats
-          const current = { ...initialCounts };
-          let newUniqueDetected = false;
-          const newTotal = { ...totalCountsRef.current };
-
-          data.detections.forEach((det: Detection) => {
-            const label = det.label.toLowerCase();
-            let key: keyof VehicleCounts | undefined;
-
-            if (label === 'motorcycle' || label === 'bike') key = 'bike';
-            else if (label === 'auto' || label === 'rickshaw') key = 'auto';
-            else if (['car', 'bus', 'truck'].includes(label)) key = label as keyof VehicleCounts;
-
-            // Map Backend ID to Frontend ID (1...N)
-            let displayId = det.id;
-            if (det.id !== undefined) {
-              if (!idMapping.current.has(det.id)) {
-                idMapping.current.set(det.id, nextId.current++);
-              }
-              displayId = idMapping.current.get(det.id);
-              // Update detection object for rendering
-              det.id = displayId;
-            }
-
-            // Update Live Count (Current Frame)
-            if (key && current[key] !== undefined) current[key]++;
-
-            // Update Total Count (Unique IDs)
-            if (displayId !== undefined && !seenIds.current.has(displayId)) {
-              seenIds.current.add(displayId);
-              if (key && newTotal[key] !== undefined) newTotal[key]++;
-              newUniqueDetected = true;
-            }
-          });
-
-          setCurrentCounts(current);
-
-          if (newUniqueDetected) {
-            // Calculate added count
-            const prevTotalSum = Object.values(totalCountsRef.current).reduce((a, b) => a + b, 0);
-            const newTotalSum = Object.values(newTotal).reduce((a, b) => a + b, 0);
-            const addedCount = newTotalSum - prevTotalSum;
-
-            setTotalCounts(newTotal);
-            totalCountsRef.current = newTotal;
-
-            // Update Global Daily Stats (LocalStorage)
-            try {
-              if (addedCount > 0) {
-                const now = new Date();
-                const todayKey = now.toISOString().split('T')[0];
-                const currentHour = now.getHours(); // 0-23
-
-                const stored = localStorage.getItem('traffic_stats');
-                let stats = stored ? JSON.parse(stored) : { date: todayKey, total: 0, hourly: {} };
-
-                // Reset if new day
-                if (stats.date !== todayKey) {
-                  stats = { date: todayKey, total: 0, hourly: {} };
-                }
-
-                // Update Total
-                stats.total = (stats.total || 0) + addedCount;
-
-                // Update Hourly
-                if (!stats.hourly[currentHour]) stats.hourly[currentHour] = 0;
-                stats.hourly[currentHour] += addedCount;
-
-                // Save
-                localStorage.setItem('traffic_stats', JSON.stringify(stats));
-
-                // Dispatch Local Event
-                window.dispatchEvent(new CustomEvent('trafficStatsUpdate', { detail: stats }));
-              }
-            } catch (e) {
-              console.error('Error updating traffic stats:', e);
-            }
-          }
-        }
-
-        if (data.fps) setFps(data.fps);
-      } catch (e) {
-        console.error('Error parsing detection data', e);
-      }
-    };
-
-    ws.onerror = () => {
-      console.error("WebSocket Error");
-      toast({
-        title: "Connection Failed",
-        description: "Could not connect to inference server.",
-        variant: "destructive"
-      });
-      setIsModelActive(false);
-    };
-
-    ws.onclose = () => {
-      if (animationFrameId) cancelAnimationFrame(animationFrameId);
-    };
-
-    return () => {
-      if (ws.readyState === WebSocket.OPEN) ws.close();
-      if (animationFrameId) cancelAnimationFrame(animationFrameId);
-    };
-  }, [isModelActive]);
-
+  // --- Vehicle Types Config ---
   const vehicleTypes = [
     { type: 'Car', key: 'car', icon: Car, color: 'text-primary' },
     { type: 'Bike', key: 'bike', icon: Bike, color: 'text-success' },
@@ -424,39 +359,84 @@ export const LiveDetection: React.FC = () => {
           </h1>
           <p className="text-muted-foreground mt-1">Real-time AI vehicle tracking and counting</p>
         </div>
-        <div className="flex items-center gap-3">
-          <input
-            type="file"
-            ref={fileInputRef}
-            className="hidden"
-            accept="video/*"
-            onChange={handleFileUpload}
-          />
 
+        {/* Unified Controls */}
+        <div className="flex items-center gap-4">
+          {/* Mode Switch */}
           <div className="flex items-center gap-2 bg-card border border-border px-4 py-2 rounded-lg shadow-sm">
+            <span className={cn("text-xs font-bold", !isOnline ? "text-primary" : "text-muted-foreground")}>OFFLINE</span>
             <Switch
-              id="model-toggle"
-              checked={isModelActive}
-              onCheckedChange={setIsModelActive}
-              disabled={!videoSource}
+              id="mode-toggle"
+              checked={isOnline}
+              onCheckedChange={(val) => {
+                setIsOnline(val);
+                // Reset everything when mode changes
+                setIsModelActive(false);
+                setIsLiveStreaming(false);
+                handleClearVideo();
+              }}
             />
-            <Label htmlFor="model-toggle" className={cn("cursor-pointer flex items-center gap-2 text-sm font-medium", !videoSource && "opacity-50")}>
-              {isModelActive ? <Wifi className="w-4 h-4 text-success" /> : <WifiOff className="w-4 h-4 text-muted-foreground" />}
-              {isModelActive ? 'Model Active' : 'Model Offline'}
-            </Label>
+            <span className={cn("text-xs font-bold", isOnline ? "text-primary" : "text-muted-foreground")}>ONLINE</span>
           </div>
 
-          {videoSource ? (
-            <Button variant="destructive" size="sm" onClick={handleClearVideo} className="gap-2">
-              <Trash2 className="w-4 h-4" />
-              Clear
-            </Button>
+          {/* Conditional Controls per Mode */}
+          {!isOnline ? (
+            // OFFLINE CONTROLS
+            <>
+              <input
+                type="file"
+                ref={fileInputRef}
+                className="hidden"
+                accept="video/*"
+                onChange={handleFileUpload}
+              />
+              <div className="flex items-center gap-2 bg-card border border-border px-4 py-2 rounded-lg shadow-sm">
+                <Switch
+                  id="offline-model-toggle"
+                  checked={isModelActive}
+                  onCheckedChange={setIsModelActive}
+                  disabled={!videoSource}
+                />
+                <Label htmlFor="offline-model-toggle" className={cn("cursor-pointer flex items-center gap-2 text-sm font-medium", !videoSource && "opacity-50")}>
+                  {isModelActive ? <Wifi className="w-4 h-4 text-success" /> : <WifiOff className="w-4 h-4 text-muted-foreground" />}
+                  {isModelActive ? 'Model Active' : 'Model Offline'}
+                </Label>
+              </div>
+
+              {videoSource ? (
+                <Button variant="destructive" size="sm" onClick={handleClearVideo} className="gap-2">
+                  <Trash2 className="w-4 h-4" />
+                  Clear
+                </Button>
+              ) : (
+                <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} className="gap-2">
+                  <Upload className="w-4 h-4" />
+                  Upload Video
+                </Button>
+              )}
+            </>
           ) : (
-            <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} className="gap-2">
-              <Upload className="w-4 h-4" />
-              Upload Video
-            </Button>
+            // ONLINE CONTROLS
+            <>
+              <div className="flex items-center gap-2">
+                <Input
+                  placeholder="Enter RTSP/HTTP URL"
+                  value={liveUrl}
+                  onChange={(e) => setLiveUrl(e.target.value)}
+                  className="w-64 h-9"
+                  disabled={isLiveStreaming}
+                />
+                <Button
+                  size="sm"
+                  variant={isLiveStreaming ? "destructive" : "default"}
+                  onClick={handleStartStopLive}
+                >
+                  {isLiveStreaming ? "Stop Detection" : "Start Detection"}
+                </Button>
+              </div>
+            </>
           )}
+
         </div>
       </div>
 
@@ -467,45 +447,75 @@ export const LiveDetection: React.FC = () => {
             <div
               ref={containerRef}
               className="absolute inset-0 flex items-center justify-center cursor-pointer"
-              onClick={togglePlay}
+              onClick={!isOnline ? togglePlay : undefined} // Only toggle play if offline
             >
-              {videoSource ? (
-                <video
-                  ref={videoRef}
-                  src={videoSource}
-                  className="w-full h-full object-contain"
-                  playsInline
-                  crossOrigin="anonymous"
-                  muted={isMuted}
-                  onTimeUpdate={handleTimeUpdate}
-                  onLoadedMetadata={handleVideoLoaded}
-                  onEnded={handleVideoEnded}
-                />
-              ) : (
-                <div className="text-center p-10">
-                  <div className="w-20 h-20 bg-muted/20 rounded-full flex items-center justify-center mx-auto mb-6 backdrop-blur-sm">
-                    <FileVideo className="w-10 h-10 text-muted-foreground" />
+
+              {!isOnline ? (
+                // OFFLINE VIEW
+                videoSource ? (
+                  <video
+                    ref={videoRef}
+                    src={videoSource}
+                    className="w-full h-full object-contain"
+                    playsInline
+                    crossOrigin="anonymous"
+                    muted={isMuted}
+                    onTimeUpdate={() => {
+                      if (videoRef.current) {
+                        setCurrentTime(videoRef.current.currentTime);
+                        if (videoRef.current.duration > 0) setProgress((videoRef.current.currentTime / videoRef.current.duration) * 100);
+                      }
+                    }}
+                    onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
+                    onEnded={() => setIsPlaying(false)}
+                  />
+                ) : (
+                  <div className="text-center p-10">
+                    <div className="w-20 h-20 bg-muted/20 rounded-full flex items-center justify-center mx-auto mb-6 backdrop-blur-sm">
+                      <FileVideo className="w-10 h-10 text-muted-foreground" />
+                    </div>
+                    <h3 className="text-xl font-semibold text-foreground">Offline Analysis</h3>
+                    <p className="text-muted-foreground mt-2 max-w-sm mx-auto">
+                      Upload a video file to run detection on pre-recorded footage.
+                    </p>
+                    <Button variant="outline" className="mt-6 gap-2" onClick={() => fileInputRef.current?.click()}>
+                      <Upload className="w-4 h-4" />
+                      Select File
+                    </Button>
                   </div>
-                  <h3 className="text-xl font-semibold text-foreground">No Video Source</h3>
-                  <p className="text-muted-foreground mt-2 max-w-sm mx-auto">
-                    Upload a video file to start detection. The AI model will process frames in real-time.
-                  </p>
-                  <Button variant="outline" className="mt-6 gap-2" onClick={() => fileInputRef.current?.click()}>
-                    <Upload className="w-4 h-4" />
-                    Select File
-                  </Button>
-                </div>
+                )
+              ) : (
+                // ONLINE VIEW (MJPEG)
+                isLiveStreaming ? (
+                  <img
+                    src={`http://localhost:8000/live-stream?url=${encodeURIComponent(liveUrl)}`}
+                    alt="Live Detection Stream"
+                    className="w-full h-full object-contain"
+                  />
+                ) : (
+                  <div className="text-center p-10">
+                    <div className="w-20 h-20 bg-muted/20 rounded-full flex items-center justify-center mx-auto mb-6 backdrop-blur-sm">
+                      <Tv className="w-10 h-10 text-primary" />
+                    </div>
+                    <h3 className="text-xl font-semibold text-foreground">Live IP Camera</h3>
+                    <p className="text-muted-foreground mt-2 max-w-sm mx-auto">
+                      Enter a valid RTSP or HTTP Stream URL above and click "Start Detection".
+                    </p>
+                  </div>
+                )
               )}
 
-              {/* Canvas Overlay */}
-              <canvas
-                ref={canvasRef}
-                className="absolute inset-0 w-full h-full pointer-events-none"
-              />
+              {/* Canvas Overlay - Only for Offline */}
+              {!isOnline && (
+                <canvas
+                  ref={canvasRef}
+                  className="absolute inset-0 w-full h-full pointer-events-none"
+                />
+              )}
             </div>
 
-            {/* Custom Controls Overlay */}
-            {videoSource && (
+            {/* Custom Controls Overlay - Offline Only */}
+            {!isOnline && videoSource && (
               <div
                 className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/60 to-transparent p-4 transition-opacity duration-300 opacity-0 group-hover:opacity-100"
                 onClick={(e) => e.stopPropagation()}
@@ -516,7 +526,12 @@ export const LiveDetection: React.FC = () => {
                     value={[progress]}
                     max={100}
                     step={0.1}
-                    onValueChange={handleSeek}
+                    onValueChange={(val) => {
+                      if (videoRef.current) {
+                        videoRef.current.currentTime = (val[0] / 100) * videoRef.current.duration;
+                        setProgress(val[0]);
+                      }
+                    }}
                     className="cursor-pointer"
                   />
                 </div>
@@ -527,26 +542,29 @@ export const LiveDetection: React.FC = () => {
                       {isPlaying ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6" />}
                     </button>
 
-                    <div className="flex items-center gap-2 group/vol">
-                      <button onClick={toggleMute} className="text-white hover:text-primary transition-colors">
-                        {isMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
-                      </button>
-                    </div>
+                    <button onClick={() => {
+                      if (videoRef.current) {
+                        videoRef.current.muted = !isMuted;
+                        setIsMuted(!isMuted);
+                      }
+                    }} className="text-white hover:text-primary transition-colors">
+                      {isMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+                    </button>
 
                     <span className="text-white/80 text-sm font-mono">
-                      {formatTime(currentTime)} / {formatTime(duration)}
+                      {Math.floor(currentTime / 60)}:{Math.floor(currentTime % 60).toString().padStart(2, '0')} /
+                      {Math.floor(duration / 60)}:{Math.floor(duration % 60).toString().padStart(2, '0')}
                     </span>
                   </div>
-
-                  <div className="flex items-center gap-4">
-                    {isModelActive && (
-                      <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-black/40 border border-white/10 backdrop-blur-md">
-                        <Cpu className="w-3 h-3 text-primary animate-pulse" />
-                        <span className="text-xs text-white font-mono">{fps} FPS</span>
-                      </div>
-                    )}
-                  </div>
                 </div>
+              </div>
+            )}
+
+            {/* FPS Indicator (Global) */}
+            {(isModelActive || isLiveStreaming) && (
+              <div className="absolute top-4 right-4 flex items-center gap-2 px-3 py-1 rounded-full bg-black/40 border border-white/10 backdrop-blur-md">
+                <Cpu className="w-3 h-3 text-primary animate-pulse" />
+                <span className="text-xs text-white font-mono">{fps || (isLiveStreaming ? "LIVE" : "0")} FPS</span>
               </div>
             )}
           </div>
@@ -578,7 +596,7 @@ export const LiveDetection: React.FC = () => {
               </div>
               <div className="p-3 rounded-lg bg-muted/30 border border-border/50">
                 <p className="text-xs text-muted-foreground mb-1">FPS</p>
-                <p className="text-xl font-bold">{fps}</p>
+                <p className="text-xl font-bold">{fps || (isLiveStreaming ? "-" : "0")}</p>
               </div>
             </div>
           </div>
