@@ -620,7 +620,7 @@ export const AdminTrafficMap: React.FC = () => {
             <Settings className="w-6 h-6 text-primary" />
           </div>
           <div>
-            <h1 className="text-2xl font-display font-black tracking-tight text-white">GRID CONTROL</h1>
+            <h1 className="text-2xl font-display font-black tracking-tighttext-gray-900 dark:text-white">GRID CONTROL</h1>
             <div className="flex items-center gap-2 text-[10px] text-muted-foreground font-bold uppercase tracking-widest">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
               System Online • {signals.length} Nodes • {emergencyVehicles.length} Emergency Vehicles • {roadblocks.length} Roadblocks
