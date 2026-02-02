@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { MapProvider } from "@/contexts/MapContext";
+import { LiveDetectionProvider } from '@/contexts/LiveDetectionContext';
 
 // Layouts
 import { PublicLayout } from "@/components/layout/PublicLayout";
@@ -49,47 +50,48 @@ const App = () => (
     <ThemeProvider>
       <AuthProvider>
         <MapProvider>
-          <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <BrowserRouter>
-            <Routes>
-              {/* Root */}
-              <Route path="/" element={<RootRedirect />} />
-              
-              {/* Authentication */}
-              <Route path="/login" element={<LoginPage />} />
-              <Route path="/register" element={<RegisterPage />} />
+          <LiveDetectionProvider>
+            <TooltipProvider>
+              <Toaster />
+              <Sonner />
+              <BrowserRouter>
+                <Routes>
+                  {/* Root */}
+                  <Route path="/" element={<RootRedirect />} />
+                  
+                  {/* Authentication */}
+                  <Route path="/login" element={<LoginPage />} />
+                  <Route path="/register" element={<RegisterPage />} />
 
-              {/* Public User Routes */}
-              <Route path="/public" element={<PublicLayout />}>
-                <Route index element={<PublicHome />} />
-                <Route path="map" element={<LiveMap />} />
-                <Route path="signals" element={<SignalStatus />} />
-                <Route path="alerts" element={<AlertsPage />} />
-                <Route path="report" element={<ReportIssuePage />} />
-                <Route path="profile" element={<ProfilePage />} />
-              </Route>
+                  {/* Public User Routes */}
+                  <Route path="/public" element={<PublicLayout />}>
+                    <Route index element={<PublicHome />} />
+                    <Route path="map" element={<LiveMap />} />
+                    <Route path="signals" element={<SignalStatus />} />
+                    <Route path="alerts" element={<AlertsPage />} />
+                    <Route path="report" element={<ReportIssuePage />} />
+                    <Route path="profile" element={<ProfilePage />} />
+                  </Route>
 
-              {/* Admin Routes */}
-              <Route path="/admin" element={<AdminLayout />}>
-                <Route index element={<AdminDashboard />} />
-                <Route path="detection" element={<LiveDetection />} />
-                <Route path="analytics" element={<LaneAnalytics />} />
-                <Route path="signals" element={<SignalControl />} />
-                <Route path="violations" element={<TrafficViolations />} />
-                <Route path="reports" element={<Reports />} />
-                <Route path="settings" element={<SettingsPage />} />
-                <Route path="users" element={<UserManagement />} />
-                <Route path="/admin/traffic-map" element={<AdminTrafficMap />} />
+                  {/* Admin Routes */}
+                  <Route path="/admin" element={<AdminLayout />}>
+                    <Route index element={<AdminDashboard />} />
+                    <Route path="detection" element={<LiveDetection />} />
+                    <Route path="analytics" element={<LaneAnalytics />} />
+                    <Route path="signals" element={<SignalControl />} />
+                    <Route path="violations" element={<TrafficViolations />} />
+                    <Route path="reports" element={<Reports />} />
+                    <Route path="settings" element={<SettingsPage />} />
+                    <Route path="users" element={<UserManagement />} />
+                    <Route path="/admin/traffic-map" element={<AdminTrafficMap />} />
+                  </Route>
 
-              </Route>
-
-              {/* 404 */}
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </BrowserRouter>
-        </TooltipProvider>
+                  {/* 404 */}
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </BrowserRouter>
+            </TooltipProvider>
+          </LiveDetectionProvider>
         </MapProvider>
       </AuthProvider>
     </ThemeProvider>

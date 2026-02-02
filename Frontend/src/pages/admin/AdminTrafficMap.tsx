@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { Loader2, Plus, Info, Trash2, Save, X } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Loader2, Plus, Info, Trash2, Save, X, Settings as SettingsIcon } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup, useMapEvents } from 'react-leaflet';
 import { divIcon } from 'leaflet';
 
@@ -40,6 +41,7 @@ const LocationMarker = ({ onMapClick }: { onMapClick: (lat: number, lng: number)
 };
 
 export const AdminTrafficMap: React.FC = () => {
+  const navigate = useNavigate();
   const [signals, setSignals] = useState<Signal[]>([]);
   const [emergencyVehicles, setEmergencyVehicles] = useState<EmergencyVehicle[]>([]);
   const [roadblocks, setRoadblocks] = useState<Roadblock[]>([]);
@@ -617,7 +619,7 @@ export const AdminTrafficMap: React.FC = () => {
       <div className="flex items-center justify-between px-2">
         <div className="flex items-center gap-4">
           <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20">
-            <Settings className="w-6 h-6 text-primary" />
+            <SettingsIcon className="w-6 h-6 text-primary" />
           </div>
           <div>
             <h1 className="text-2xl font-display font-black tracking-tighttext-gray-900 dark:text-white">GRID CONTROL</h1>
@@ -746,6 +748,20 @@ export const AdminTrafficMap: React.FC = () => {
                     </div>
                     
                     <h3 className="text-lg font-bold mb-4">{signal.name}</h3>
+                    
+                    <button
+                      onClick={() => navigate('/admin/signals', { 
+                        state: { 
+                          signalId: signal.id,
+                          signalName: signal.name,
+                          congestionLevel: signal.congestionLevel
+                        } 
+                      })}
+                      className="w-full mb-4 py-2 bg-primary/20 hover:bg-primary/30 text-primary border border-primary/50 rounded-lg font-bold uppercase text-[10px] tracking-widest flex items-center justify-center gap-2 transition-all"
+                    >
+                      <SettingsIcon className="w-3 h-3" />
+                      Control Signal
+                    </button>
                     
                     <div className="space-y-6">
                       <div>

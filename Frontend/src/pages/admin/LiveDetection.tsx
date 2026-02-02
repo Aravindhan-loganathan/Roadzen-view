@@ -1,10 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
   Play,
   Pause,
   Volume2,
   VolumeX,
-  Maximize2,
   Upload,
   Trash2,
   Activity,
@@ -27,73 +26,35 @@ import { Slider } from '@/components/ui/slider';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-
-interface Detection {
-  id?: number;
-  label: string;
-  conf: number;
-  box: [number, number, number, number]; // [x, y, w, h] in percentages (0-1)
-}
-
-interface VehicleCounts {
-  car: number;
-  bike: number;
-  bus: number;
-  truck: number;
-  auto: number;
-}
-
-const initialCounts: VehicleCounts = { car: 0, bike: 0, bus: 0, truck: 0, auto: 0 };
+import { useLiveDetection, VehicleCounts } from '@/contexts/LiveDetectionContext';
 
 export const LiveDetection: React.FC = () => {
-  // Video State (Offline)
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [isMuted, setIsMuted] = useState(true);
-  const [progress, setProgress] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const [videoSource, setVideoSource] = useState<string | null>(null);
-  const [currentTime, setCurrentTime] = useState(0);
+  const {
+    isOnline, setIsOnline,
+    videoSource, setVideoSource,
+    liveUrl, setLiveUrl,
+    isLiveStreaming, setIsLiveStreaming,
+    isModelActive, setIsModelActive,
+    fps,
+    currentCounts,
+    totalCounts,
+    detections,
+    congestionLevel,
+    signalState,
+    videoRef,
+    isPlaying, togglePlay,
+    isMuted, toggleMute,
+    progress, setProgress,
+    duration, currentTime,
+    resetStats
+  } = useLiveDetection();
 
-  // Online / Mode State
-  const [isOnline, setIsOnline] = useState(false);
-  const [liveUrl, setLiveUrl] = useState(''); // Stores the input URL
-  const [isLiveStreaming, setIsLiveStreaming] = useState(false); // Controls <img src>
-
-  // General Detection State
-  const [isModelActive, setIsModelActive] = useState(false); // used for offline toggle
-  const [fps, setFps] = useState(0);
-  const [detections, setDetections] = useState<Detection[]>([]);
-
-  // Stats State
-  const [currentCounts, setCurrentCounts] = useState<VehicleCounts>(initialCounts);
-  const [totalCounts, setTotalCounts] = useState<VehicleCounts>(initialCounts);
-
-  // Refs
-  const videoRef = useRef<HTMLVideoElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const offscreenCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const wsRef = useRef<WebSocket | null>(null);
-  const seenIds = useRef<Set<number>>(new Set());
-  const totalCountsRef = useRef<VehicleCounts>(initialCounts);
-  const idMapping = useRef<Map<number, number>>(new Map());
-  const nextId = useRef(1);
-
+  const displayCanvasRef = useRef<HTMLCanvasElement>(null); // Canvas for displaying video + detections
+  const containerRef = useRef<HTMLDivElement>(null); // Container for the canvas, to get dimensions
   const { toast } = useToast();
 
   // --- Helpers ---
-  const resetStats = () => {
-    setDetections([]);
-    setCurrentCounts(initialCounts);
-    setTotalCounts(initialCounts);
-    totalCountsRef.current = initialCounts;
-    seenIds.current.clear();
-    idMapping.current.clear();
-    nextId.current = 1;
-    setFps(0);
-  };
-
   const getClassColor = (label: string) => {
     switch (label.toLowerCase()) {
       case 'car': return '#3b82f6';
@@ -107,53 +68,82 @@ export const LiveDetection: React.FC = () => {
     }
   };
 
-  const updateStats = (dataDetections: Detection[]) => {
-    const current = { ...initialCounts };
-    let newUniqueDetected = false;
-    const newTotal = { ...totalCountsRef.current };
+  // --- Canvas Mirroring & Bounding Boxes ---
+  useEffect(() => {
+    let animationFrameId: number;
+    
+    const renderLoop = () => {
+      const canvas = displayCanvasRef.current;
+      const container = containerRef.current;
+      const video = videoRef.current;
 
-    dataDetections.forEach((det: Detection) => {
-      const label = det.label.toLowerCase();
-      let key: keyof VehicleCounts | undefined;
-
-      if (label === 'motorcycle' || label === 'bike') key = 'bike';
-      else if (label === 'auto' || label === 'rickshaw') key = 'auto';
-      else if (['car', 'bus', 'truck'].includes(label)) key = label as keyof VehicleCounts;
-
-      let displayId = det.id;
-      if (det.id !== undefined) {
-        if (!idMapping.current.has(det.id)) {
-          idMapping.current.set(det.id, nextId.current++);
+      if (canvas && container) {
+        // Resize canvas to container
+        if (canvas.width !== container.clientWidth || canvas.height !== container.clientHeight) {
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
         }
-        displayId = idMapping.current.get(det.id);
-        det.id = displayId;
+
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+          // 1. Draw Video Frame (Mirror global video)
+          if (!isOnline && video && videoSource) { // Only draw video if in offline mode and a source is loaded
+             // Draw image scaled to cover or contain? content-active
+             // We want "contain" usually.
+             // Simple draw:
+             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          }
+
+          // 2. Draw Detections
+          // Only if Model Active, or we just want to show them if they exist?
+          // If offline model active, or online...
+          if ((!isOnline && isModelActive) || (isOnline && isLiveStreaming && detections.length > 0)) {
+              detections.forEach(det => {
+                const [x, y, w, h] = det.box;
+                const color = getClassColor(det.label);
+    
+                const sx = x * canvas.width;
+                const sy = y * canvas.height;
+                const sw = w * canvas.width;
+                const sh = h * canvas.height;
+    
+                // Draw Box
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 2;
+                ctx.strokeRect(sx, sy, sw, sh);
+    
+                // Draw Label
+                ctx.fillStyle = color;
+                ctx.globalAlpha = 0.8;
+                const idText = det.id ? `ID:${det.id} ` : '';
+                const text = `${idText}${det.label} ${Math.round(det.conf * 100)}%`;
+                const textMetrics = ctx.measureText(text);
+                ctx.fillRect(sx, sy - 20, textMetrics.width + 10, 20);
+    
+                ctx.globalAlpha = 1.0;
+                ctx.fillStyle = '#ffffff';
+                ctx.font = '12px sans-serif';
+                ctx.fillText(text, sx + 5, sy - 6);
+              });
+          }
+        }
       }
+      animationFrameId = requestAnimationFrame(renderLoop);
+    };
 
-      if (key && current[key] !== undefined) current[key]++;
-      if (displayId !== undefined && !seenIds.current.has(displayId)) {
-        seenIds.current.add(displayId);
-        if (key && newTotal[key] !== undefined) newTotal[key]++;
-        newUniqueDetected = true;
-      }
-    });
+    renderLoop();
+    return () => cancelAnimationFrame(animationFrameId);
+  }, [detections, isOnline, isModelActive, videoRef, videoSource, isLiveStreaming]); // Added isLiveStreaming dependency
 
-    setCurrentCounts(current);
-    if (newUniqueDetected) {
-      setTotalCounts(newTotal);
-      totalCountsRef.current = newTotal;
-    }
-  };
-
-  // --- Offline Mode Logic ---
-
+  // --- Handlers ---
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
       const url = URL.createObjectURL(file);
       setVideoSource(url);
       resetStats();
-      setIsPlaying(false);
-      setProgress(0);
       toast({
         title: "Video Loaded",
         description: "Ready to play. Enable 'Model Connected' for detection.",
@@ -162,181 +152,25 @@ export const LiveDetection: React.FC = () => {
   };
 
   const handleClearVideo = () => {
-    if (videoSource) {
-      URL.revokeObjectURL(videoSource);
-    }
     setVideoSource(null);
     resetStats();
-    setIsPlaying(false);
     setIsModelActive(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const togglePlay = () => {
-    if (videoRef.current) {
-      if (isPlaying) videoRef.current.pause();
-      else videoRef.current.play();
-      setIsPlaying(!isPlaying);
-    }
-  };
-
-  // Offline: WebSocket & Inference Loop
-  useEffect(() => {
-    if (isOnline) return; // Do not run offline logic if isOnline is true
-
-    if (!isModelActive) {
-      if (wsRef.current) {
-        wsRef.current.close();
-        wsRef.current = null;
-      }
-      return;
-    }
-
-    const ws = new WebSocket('ws://localhost:8000/ws/detection'); // Keep original offline endpoint
-    wsRef.current = ws;
-    let animationFrameId: number;
-
-    ws.onopen = () => {
-      console.log('Connected to Offline Model Stream');
-      sendFrames();
-    };
-
-    const sendFrames = () => {
-      if (ws.readyState !== WebSocket.OPEN) return;
-
-      const now = Date.now();
-      const lastSendTime = (ws as any)._lastSendTime || 0;
-
-      // Limit to ~30 FPS
-      if (now - lastSendTime < 33) {
-        animationFrameId = requestAnimationFrame(sendFrames);
-        return;
-      }
-
-      if (videoRef.current && !videoRef.current.paused && !videoRef.current.ended) {
-        const video = videoRef.current;
-        // Optimization: limit resolution sent to backend
-        const scale = 480 / video.videoWidth;
-        const w = Math.floor(video.videoWidth * scale);
-        const h = Math.floor(video.videoHeight * scale);
-
-        if (!offscreenCanvasRef.current) {
-          offscreenCanvasRef.current = document.createElement('canvas');
-        }
-
-        if (offscreenCanvasRef.current.width !== w || offscreenCanvasRef.current.height !== h) {
-          offscreenCanvasRef.current.width = w;
-          offscreenCanvasRef.current.height = h;
-        }
-
-        const ctx = offscreenCanvasRef.current.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(video, 0, 0, w, h);
-          offscreenCanvasRef.current.toBlob((blob) => {
-            if (blob && ws.readyState === WebSocket.OPEN && ws.bufferedAmount === 0) {
-              ws.send(blob);
-              (ws as any)._lastSendTime = now;
-            }
-          }, 'image/jpeg', 0.5);
-        }
-      }
-
-      animationFrameId = requestAnimationFrame(sendFrames);
-    };
-
-    ws.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.detections) {
-          setDetections(data.detections);
-          updateStats(data.detections);
-        }
-        if (data.fps) setFps(data.fps);
-      } catch (e) {
-        console.error('Error parsing detection data', e);
-      }
-    };
-
-    return () => {
-      if (ws.readyState === WebSocket.OPEN) ws.close();
-      if (animationFrameId) cancelAnimationFrame(animationFrameId);
-    };
-  }, [isModelActive, isOnline]);
-
-  // Offline: Canvas Drawing Effect
-  useEffect(() => {
-    if (isOnline) return; // Only for offline mode
-
-    const canvas = canvasRef.current;
-    const container = containerRef.current;
-    if (!canvas || !container) return;
-
-    canvas.width = container.clientWidth;
-    canvas.height = container.clientHeight;
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    detections.forEach(det => {
-      const [x, y, w, h] = det.box;
-      const color = getClassColor(det.label);
-
-      const sx = x * canvas.width;
-      const sy = y * canvas.height;
-      const sw = w * canvas.width;
-      const sh = h * canvas.height;
-
-      // Draw Box
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 2;
-      ctx.strokeRect(sx, sy, sw, sh);
-
-      // Draw Label
-      ctx.fillStyle = color;
-      ctx.globalAlpha = 0.8;
-      const idText = det.id ? `ID:${det.id} ` : '';
-      const text = `${idText}${det.label} ${Math.round(det.conf * 100)}%`;
-      const textMetrics = ctx.measureText(text);
-      ctx.fillRect(sx, sy - 20, textMetrics.width + 10, 20);
-
-      ctx.globalAlpha = 1.0;
-      ctx.fillStyle = '#ffffff';
-      ctx.font = '12px sans-serif';
-      ctx.fillText(text, sx + 5, sy - 6);
-    });
-  }, [detections, isOnline]);
-
-
-  // --- Online Mode Logic ---
-
   const handleStartStopLive = () => {
     if (isLiveStreaming) {
-      // Stop
       setIsLiveStreaming(false);
-      // setDetections([]); // Optional: keep last frame? better to clear 
-      setFps(0);
     } else {
-      // Start
       if (!liveUrl) {
-        toast({ title: "Error", description: "Please enter a valid RTSP/HTTP URL", variant: "destructive" });
+        toast({ title: "Error", description: "Enter RTSP URL", variant: "destructive" });
         return;
       }
-      // resetStats(); // Maybe don't reset total stats? User choice. Let's reset for fresh start.
-      resetStats();
       setIsLiveStreaming(true);
+      resetStats();
     }
   };
-
-  // Effect to clean up streaming state if we toggle Offline
-  useEffect(() => {
-    if (!isOnline) {
-      setIsLiveStreaming(false);
-    }
-  }, [isOnline]);
-
-  // --- Vehicle Types Config ---
+  
   const vehicleTypes = [
     { type: 'Car', key: 'car', icon: Car, color: 'text-primary' },
     { type: 'Bike', key: 'bike', icon: Bike, color: 'text-success' },
@@ -366,14 +200,12 @@ export const LiveDetection: React.FC = () => {
           <div className="flex items-center gap-2 bg-card border border-border px-4 py-2 rounded-lg shadow-sm">
             <span className={cn("text-xs font-bold", !isOnline ? "text-primary" : "text-muted-foreground")}>OFFLINE</span>
             <Switch
-              id="mode-toggle"
               checked={isOnline}
               onCheckedChange={(val) => {
                 setIsOnline(val);
                 // Reset everything when mode changes
                 setIsModelActive(false);
                 setIsLiveStreaming(false);
-                handleClearVideo();
               }}
             />
             <span className={cn("text-xs font-bold", isOnline ? "text-primary" : "text-muted-foreground")}>ONLINE</span>
@@ -405,13 +237,11 @@ export const LiveDetection: React.FC = () => {
 
               {videoSource ? (
                 <Button variant="destructive" size="sm" onClick={handleClearVideo} className="gap-2">
-                  <Trash2 className="w-4 h-4" />
-                  Clear
+                  <Trash2 className="w-4 h-4" /> Clear
                 </Button>
               ) : (
                 <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} className="gap-2">
-                  <Upload className="w-4 h-4" />
-                  Upload Video
+                  <Upload className="w-4 h-4" /> Upload Video
                 </Button>
               )}
             </>
@@ -453,22 +283,8 @@ export const LiveDetection: React.FC = () => {
               {!isOnline ? (
                 // OFFLINE VIEW
                 videoSource ? (
-                  <video
-                    ref={videoRef}
-                    src={videoSource}
-                    className="w-full h-full object-contain"
-                    playsInline
-                    crossOrigin="anonymous"
-                    muted={isMuted}
-                    onTimeUpdate={() => {
-                      if (videoRef.current) {
-                        setCurrentTime(videoRef.current.currentTime);
-                        if (videoRef.current.duration > 0) setProgress((videoRef.current.currentTime / videoRef.current.duration) * 100);
-                      }
-                    }}
-                    onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
-                    onEnded={() => setIsPlaying(false)}
-                  />
+                  // Use Canvas to mirror the Global Video
+                  <canvas ref={displayCanvasRef} className="w-full h-full object-contain" />
                 ) : (
                   <div className="text-center p-10">
                     <div className="w-20 h-20 bg-muted/20 rounded-full flex items-center justify-center mx-auto mb-6 backdrop-blur-sm">
@@ -476,11 +292,10 @@ export const LiveDetection: React.FC = () => {
                     </div>
                     <h3 className="text-xl font-semibold text-foreground">Offline Analysis</h3>
                     <p className="text-muted-foreground mt-2 max-w-sm mx-auto">
-                      Upload a video file to run detection on pre-recorded footage.
+                      Upload a video file to run detection.
                     </p>
                     <Button variant="outline" className="mt-6 gap-2" onClick={() => fileInputRef.current?.click()}>
-                      <Upload className="w-4 h-4" />
-                      Select File
+                      <Upload className="w-4 h-4" /> Select File
                     </Button>
                   </div>
                 )
@@ -499,18 +314,10 @@ export const LiveDetection: React.FC = () => {
                     </div>
                     <h3 className="text-xl font-semibold text-foreground">Live IP Camera</h3>
                     <p className="text-muted-foreground mt-2 max-w-sm mx-auto">
-                      Enter a valid RTSP or HTTP Stream URL above and click "Start Detection".
+                      Enter URL to start detection.
                     </p>
                   </div>
                 )
-              )}
-
-              {/* Canvas Overlay - Only for Offline */}
-              {!isOnline && (
-                <canvas
-                  ref={canvasRef}
-                  className="absolute inset-0 w-full h-full pointer-events-none"
-                />
               )}
             </div>
 
@@ -527,10 +334,11 @@ export const LiveDetection: React.FC = () => {
                     max={100}
                     step={0.1}
                     onValueChange={(val) => {
-                      if (videoRef.current) {
-                        videoRef.current.currentTime = (val[0] / 100) * videoRef.current.duration;
-                        setProgress(val[0]);
-                      }
+                        // Seek logic
+                        if (videoRef.current) {
+                            videoRef.current.currentTime = (val[0] / 100) * videoRef.current.duration;
+                            setProgress(val[0]);
+                        }
                     }}
                     className="cursor-pointer"
                   />
@@ -542,12 +350,7 @@ export const LiveDetection: React.FC = () => {
                       {isPlaying ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6" />}
                     </button>
 
-                    <button onClick={() => {
-                      if (videoRef.current) {
-                        videoRef.current.muted = !isMuted;
-                        setIsMuted(!isMuted);
-                      }
-                    }} className="text-white hover:text-primary transition-colors">
+                    <button onClick={toggleMute} className="text-white hover:text-primary transition-colors">
                       {isMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
                     </button>
 
@@ -572,6 +375,44 @@ export const LiveDetection: React.FC = () => {
 
         {/* Stats Panel */}
         <div className="flex flex-col gap-3 min-h-0 overflow-y-auto pr-1">
+          {/* Traffic Signal Status Card - Dynamic Logic Visualization */}
+          <div className="glow-card p-4 bg-card/50 backdrop-blur-sm border-l-4" style={{ 
+            borderLeftColor: signalState === 'Green' ? '#22c55e' : signalState === 'Yellow' ? '#eab308' : '#ef4444' 
+          }}>
+             <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                   <div className={cn("p-2 rounded-full border-2", 
+                      signalState === 'Green' ? "bg-green-500/20 border-green-500 animate-pulse" : "bg-transparent border-slate-700",
+                      signalState === 'Yellow' ? "bg-yellow-500/20 border-yellow-500" : "",
+                      signalState === 'Red' ? "bg-red-500/20 border-red-500" : ""
+                   )}>
+                      <div className={cn("w-3 h-3 rounded-full", 
+                         signalState === 'Green' ? "bg-green-500" : 
+                         signalState === 'Yellow' ? "bg-yellow-500" : 
+                         "bg-red-500"
+                      )} />
+                   </div>
+                   <div>
+                      <h3 className="font-bold text-lg">Signal: {signalState.toUpperCase()}</h3>
+                      <p className="text-xs text-muted-foreground">
+                         Congestion: <span className={cn("font-bold",
+                            congestionLevel === 'High' ? "text-red-400" :
+                            congestionLevel === 'Medium' ? "text-yellow-400" :
+                            "text-green-400"
+                         )}>{congestionLevel}</span>
+                      </p>
+                   </div>
+                </div>
+                {/* Density Score Indicator */}
+                 <div className="text-right">
+                    <span className="text-xs text-muted-foreground block">Action</span>
+                    <span className="text-sm font-semibold">
+                       {signalState === 'Green' ? 'Clear Traffic' : signalState === 'Yellow' ? 'Prepare Stop' : 'Standard'}
+                    </span>
+                 </div>
+             </div>
+          </div>
+
           {/* Total Count Card */}
           <div className="glow-card p-4 bg-card/50 backdrop-blur-sm">
             <div className="flex items-center justify-between mb-4">
