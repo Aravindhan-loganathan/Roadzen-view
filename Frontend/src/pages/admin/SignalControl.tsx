@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import {
   Radio,
@@ -19,32 +19,49 @@ export const SignalControl: React.FC = () => {
   const { state } = useLocation();
   const [autoMode, setAutoMode] = useState(true);
   const [signalTimer, setSignalTimer] = useState([30]);
-  const [selectedJunction, setSelectedJunction] = useState(state?.signalId || 1);
+
+  // Initialize with state ID if available, otherwise try localStorage, else default to 1
+  const [selectedJunction, setSelectedJunction] = useState(() => {
+    if (state?.signalId) {
+      localStorage.setItem('selectedSignalId', state.signalId.toString());
+      return state.signalId;
+    }
+    const stored = localStorage.getItem('selectedSignalId');
+    return stored ? parseInt(stored, 10) : 1;
+  });
+
   const [emergencyOverride, setEmergencyOverride] = useState(false);
   const [manualSignalState, setManualSignalState] = useState<'Red' | 'Yellow' | 'Green'>('Red');
 
+  // Persist selection whenever it changes
+  useEffect(() => {
+    if (selectedJunction) {
+      localStorage.setItem('selectedSignalId', selectedJunction.toString());
+    }
+  }, [selectedJunction]);
+
   // Live Detection Context
-  const { 
-    isModelActive, 
-    isLiveStreaming, 
-    signalState, 
-    congestionLevel: liveCongestion 
+  const {
+    isModelActive,
+    isLiveStreaming,
+    signalState,
+    congestionLevel: liveCongestion
   } = useLiveDetection();
 
   const isDetectionActive = isModelActive || isLiveStreaming;
   const mockJunction = junctions.find(j => j.id === selectedJunction);
-  
+
   // Resolve current state logic
-  const resolveSignalState = () : 'Red' | 'Yellow' | 'Green' => {
+  const resolveSignalState = (): 'Red' | 'Yellow' | 'Green' => {
     // Priority 1: Emergency Override (Forces GREEN to clear path)
     if (emergencyOverride) return 'Green';
-    
+
     // Priority 2: Manual Mode
     if (!autoMode) return manualSignalState;
-    
+
     // Priority 3: AI Auto Mode (Live Detection)
     if (isDetectionActive) return signalState;
-    
+
     // Priority 4: Standard Mock/Nav Data (Auto Fallback)
     const level = (state?.congestionLevel || mockJunction?.congestionLevel || 'low').toLowerCase();
     if (level === 'high') return 'Red';
@@ -54,15 +71,56 @@ export const SignalControl: React.FC = () => {
 
   const currentActiveLight = resolveSignalState();
 
+  // Reverse map active light to congestion level for DB/Display consistency
+  const getDerivedCongestion = (light: 'Red' | 'Yellow' | 'Green') => {
+    if (light === 'Red') return 'high';
+    if (light === 'Yellow') return 'medium';
+    return 'low';
+  };
+
   const currentJunction = {
     id: selectedJunction,
     name: state?.signalName || mockJunction?.name || 'Traffic Junction',
-    congestionLevel: isDetectionActive 
-      ? liveCongestion 
-      : (state?.congestionLevel || mockJunction?.congestionLevel || 'low'),
+    // We update this to reflect the ACTUAL effective state (including Manual/Emergency)
+    congestionLevel: getDerivedCongestion(currentActiveLight),
     countdown: autoMode ? (mockJunction?.countdown || 30) : signalTimer[0], // Use slider in manual
     currentGreen: mockJunction?.currentGreen || '--'
   };
+
+  // Sync state to Database
+  useEffect(() => {
+    const syncToDatabase = async () => {
+      try {
+        const token = localStorage.getItem('traffic_token');
+        if (!token) return;
+
+        // Current active light determines actual effective state for the map/DB if we map it back
+        // But the DB schema uses 'congestionLevel'.
+        // If we are in manual mode or emergency, the effective congestion might be considered changed for visual consistency?
+        // For now, we stick to updating the congestion level as calculated.
+
+        await fetch(`http://localhost:3000/api/signals/${selectedJunction}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            congestionLevel: currentJunction.congestionLevel,
+            // We can also sync the 'currentGreen' lane if we had that data, 
+            // or the countdown (but that changes too fast for DB sync usually)
+          })
+        });
+        console.log(`Synced signal ${selectedJunction} to DB: ${currentJunction.congestionLevel}`);
+      } catch (error) {
+        console.error('Failed to sync signal state:', error);
+      }
+    };
+
+    // Debounce the update to avoid network spam
+    const timeoutId = setTimeout(syncToDatabase, 1000);
+    return () => clearTimeout(timeoutId);
+  }, [currentJunction.congestionLevel, selectedJunction]);
 
   return (
     <div className="space-y-6">
@@ -104,37 +162,37 @@ export const SignalControl: React.FC = () => {
                     </p>
                   </div>
                 </div>
-                <Switch 
-                   checked={autoMode} 
-                   onCheckedChange={(val) => {
-                     setAutoMode(val);
-                     if (emergencyOverride) setEmergencyOverride(false); // Disable emergency if switching modes? Optional.
-                   }} 
+                <Switch
+                  checked={autoMode}
+                  onCheckedChange={(val) => {
+                    setAutoMode(val);
+                    if (emergencyOverride) setEmergencyOverride(false); // Disable emergency if switching modes? Optional.
+                  }}
                 />
               </div>
 
               {/* Manual Controls - Visible only in Manual Mode */}
               {!autoMode && !emergencyOverride && (
                 <div className="p-4 rounded-lg bg-muted/30 border border-border/50 animate-in fade-in slide-in-from-top-2">
-                   <p className="text-sm font-medium mb-3">Manual Override</p>
-                   <div className="flex justify-between gap-2">
-                      {['Red', 'Yellow', 'Green'].map((color) => (
-                        <button
-                          key={color}
-                          onClick={() => setManualSignalState(color as 'Red' | 'Yellow' | 'Green')}
-                          className={cn(
-                            "flex-1 py-2 px-3 rounded-md text-xs font-bold uppercase transition-all",
-                            manualSignalState === color 
-                              ? color === 'Red' ? "bg-red-500 text-white shadow-lg shadow-red-500/20" 
-                              : color === 'Yellow' ? "bg-yellow-500 text-black shadow-lg shadow-yellow-500/20" 
-                              : "bg-green-500 text-white shadow-lg shadow-green-500/20"
-                              : "bg-card hover:bg-muted border border-border text-muted-foreground"
-                          )}
-                        >
-                          {color}
-                        </button>
-                      ))}
-                   </div>
+                  <p className="text-sm font-medium mb-3">Manual Override</p>
+                  <div className="flex justify-between gap-2">
+                    {['Red', 'Yellow', 'Green'].map((color) => (
+                      <button
+                        key={color}
+                        onClick={() => setManualSignalState(color as 'Red' | 'Yellow' | 'Green')}
+                        className={cn(
+                          "flex-1 py-2 px-3 rounded-md text-xs font-bold uppercase transition-all",
+                          manualSignalState === color
+                            ? color === 'Red' ? "bg-red-500 text-white shadow-lg shadow-red-500/20"
+                              : color === 'Yellow' ? "bg-yellow-500 text-black shadow-lg shadow-yellow-500/20"
+                                : "bg-green-500 text-white shadow-lg shadow-green-500/20"
+                            : "bg-card hover:bg-muted border border-border text-muted-foreground"
+                        )}
+                      >
+                        {color}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
@@ -176,7 +234,7 @@ export const SignalControl: React.FC = () => {
                 const newState = !emergencyOverride;
                 setEmergencyOverride(newState);
                 if (newState) {
-                   setAutoMode(false); // Force manual mode logic essentially
+                  setAutoMode(false); // Force manual mode logic essentially
                 }
               }}
             >
@@ -206,21 +264,21 @@ export const SignalControl: React.FC = () => {
               {/* Red Light */}
               <div className={cn("w-16 h-16 rounded-full transition-all duration-500",
                 currentActiveLight === 'Red'
-                  ? 'bg-red-500 shadow-[0_0_40px_rgba(239,68,68,0.6)] animate-pulse' 
+                  ? 'bg-red-500 shadow-[0_0_40px_rgba(239,68,68,0.6)] animate-pulse'
                   : 'bg-red-950/20 opacity-30'
               )} />
-              
+
               {/* Yellow Light */}
               <div className={cn("w-16 h-16 rounded-full transition-all duration-500",
                 currentActiveLight === 'Yellow'
-                  ? 'bg-yellow-400 shadow-[0_0_40px_rgba(250,204,21,0.6)] animate-pulse' 
+                  ? 'bg-yellow-400 shadow-[0_0_40px_rgba(250,204,21,0.6)] animate-pulse'
                   : 'bg-yellow-900/10 opacity-30'
               )} />
-              
+
               {/* Green Light */}
               <div className={cn("w-16 h-16 rounded-full transition-all duration-500",
                 currentActiveLight === 'Green'
-                  ? 'bg-emerald-500 shadow-[0_0_40px_rgba(16,185,129,0.6)] animate-pulse' 
+                  ? 'bg-emerald-500 shadow-[0_0_40px_rgba(16,185,129,0.6)] animate-pulse'
                   : 'bg-emerald-950/10 opacity-30'
               )} />
             </div>
@@ -229,44 +287,44 @@ export const SignalControl: React.FC = () => {
               {/* Signal Command */}
               <div className="p-4 rounded-xl bg-black/20 border border-white/5">
                 <h2 className={cn("text-5xl font-display font-bold uppercase tracking-widest",
-                   emergencyOverride ? 'text-blue-500 animate-pulse' :
-                   currentActiveLight === 'Red' ? 'text-red-500' :
-                   currentActiveLight === 'Yellow' ? 'text-yellow-400' : 
-                   'text-emerald-500'
+                  emergencyOverride ? 'text-blue-500 animate-pulse' :
+                    currentActiveLight === 'Red' ? 'text-red-500' :
+                      currentActiveLight === 'Yellow' ? 'text-yellow-400' :
+                        'text-emerald-500'
                 )}>
                   {emergencyOverride ? 'PRIORITY' :
-                   currentActiveLight === 'Green' ? 'GO' : 
-                   currentActiveLight === 'Yellow' ? 'SLOW' : 
-                   'STOP'}
+                    currentActiveLight === 'Green' ? 'GO' :
+                      currentActiveLight === 'Yellow' ? 'SLOW' :
+                        'STOP'}
                 </h2>
                 <p className="text-xs text-muted-foreground font-mono mt-1 uppercase tracking-[0.2em]">Signal Command</p>
               </div>
 
               {/* Congestion Status (Separated) */}
               <div className="flex items-center justify-center gap-3">
-                 <div className={cn("w-2 h-2 rounded-full",
-                    currentJunction.congestionLevel.toLowerCase() === 'low' ? 'bg-emerald-500' :
-                    currentJunction.congestionLevel.toLowerCase() === 'medium' ? 'bg-yellow-500' : 
-                    currentJunction.congestionLevel.toLowerCase() === 'high' ? 'bg-red-500' : 'bg-gray-500'
-                 )} />
-                 <p className="text-lg font-medium text-foreground">
-                    {/* If Live Detection is Off, check Mock/Nav. If On, use Live Data */}
-                    {!isDetectionActive && !state 
-                       ? 'Waiting for Live Feed...' 
-                       : `${currentJunction.congestionLevel.toUpperCase()} CONGESTION`
-                    }
-                 </p>
+                <div className={cn("w-2 h-2 rounded-full",
+                  currentJunction.congestionLevel.toLowerCase() === 'low' ? 'bg-emerald-500' :
+                    currentJunction.congestionLevel.toLowerCase() === 'medium' ? 'bg-yellow-500' :
+                      currentJunction.congestionLevel.toLowerCase() === 'high' ? 'bg-red-500' : 'bg-gray-500'
+                )} />
+                <p className="text-lg font-medium text-foreground">
+                  {/* If Live Detection is Off, check Mock/Nav. If On, use Live Data */}
+                  {!isDetectionActive && !state
+                    ? 'Waiting for Live Feed...'
+                    : `${currentJunction.congestionLevel.toUpperCase()} CONGESTION`
+                  }
+                </p>
               </div>
             </div>
 
             {/* Countdown Display */}
             <div className="mt-6">
-               <div className="bg-black border border-white/10 rounded-lg px-6 py-3">
-                  <span className="font-mono text-5xl font-bold text-orange-500 tracking-wider">
-                    {currentJunction.countdown?.toString().padStart(2, '0') || '30'}
-                  </span>
-                  <span className="text-xs text-orange-500/50 ml-1">s</span>
-               </div>
+              <div className="bg-black border border-white/10 rounded-lg px-6 py-3">
+                <span className="font-mono text-5xl font-bold text-orange-500 tracking-wider">
+                  {currentJunction.countdown?.toString().padStart(2, '0') || '30'}
+                </span>
+                <span className="text-xs text-orange-500/50 ml-1">s</span>
+              </div>
             </div>
           </div>
 

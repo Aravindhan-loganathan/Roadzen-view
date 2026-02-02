@@ -77,7 +77,7 @@ export const AdminTrafficMap: React.FC = () => {
   const [newVehicle, setNewVehicle] = useState<{ lat: number; lng: number } | null>(null);
   const [vehicleForm, setVehicleForm] = useState({ type: 'ambulance' as 'ambulance' | 'firetruck' | 'police' | 'other', identifier: '', priority: 'medium' as 'low' | 'medium' | 'high' });
   const [editingVehicleId, setEditingVehicleId] = useState<number | null>(null);
-  const [editingForm, setEditingForm] = useState<{ id?: number; type?: string; identifier?: string; priority?: 'low'|'medium'|'high'; lat?: number; lng?: number } | null>(null);
+  const [editingForm, setEditingForm] = useState<{ id?: number; type?: string; identifier?: string; priority?: 'low' | 'medium' | 'high'; lat?: number; lng?: number } | null>(null);
   const [pickingEditLocationId, setPickingEditLocationId] = useState<number | null>(null);
   const [pickingEditRoadblockId, setPickingEditRoadblockId] = useState<number | null>(null);
 
@@ -103,7 +103,7 @@ export const AdminTrafficMap: React.FC = () => {
   };
 
   // Fetch emergency vehicles from backend
-  const fetchEmergencyVehicles = async () => { 
+  const fetchEmergencyVehicles = async () => {
     try {
       const token = localStorage.getItem('traffic_token');
       const res = await fetch('http://localhost:3000/api/emergency-vehicles', {
@@ -435,7 +435,7 @@ export const AdminTrafficMap: React.FC = () => {
     fetchEmergencyVehicles();
   };
 
-  const fetchSignals = async () => { 
+  const fetchSignals = async () => {
     try {
       const token = localStorage.getItem('traffic_token');
       const res = await fetch('http://localhost:3000/api/signals', {
@@ -463,6 +463,7 @@ export const AdminTrafficMap: React.FC = () => {
       fetchEmergencyVehicles();
       fetchRoadblocks();
       fetchDashboardSummary();
+      fetchSignals();
     }, 5000);
 
     return () => clearInterval(pollInterval);
@@ -509,7 +510,7 @@ export const AdminTrafficMap: React.FC = () => {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
-      
+
       if (res.ok) {
         setSignals(prev => prev.filter(s => s.id !== id));
         setDeletingId(null);
@@ -646,48 +647,45 @@ export const AdminTrafficMap: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-3">
-            <button 
+            <button
               onClick={() => {
                 setIsAdding(!isAdding);
                 setNewJunction(null);
               }}
-              className={`flex items-center gap-2 px-6 py-3 rounded-xl font-black uppercase tracking-widest text-[11px] transition-all duration-300 ${
-                isAdding 
-                  ? 'bg-rose-500/20 text-rose-500 border border-rose-500/40 hover:bg-rose-500/30 active:scale-95' 
+              className={`flex items-center gap-2 px-6 py-3 rounded-xl font-black uppercase tracking-widest text-[11px] transition-all duration-300 ${isAdding
+                  ? 'bg-rose-500/20 text-rose-500 border border-rose-500/40 hover:bg-rose-500/30 active:scale-95'
                   : 'bg-primary text-white hover:bg-primary/90 shadow-[0_0_20px_rgba(var(--primary),0.3)] active:scale-95'
-              }`}
+                }`}
             >
               {isAdding ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
               {isAdding ? 'Cancel Mode' : 'Deploy Junction'}
             </button>
 
-            <button 
+            <button
               onClick={() => {
                 setIsAddingVehicle(!isAddingVehicle);
                 setNewVehicle(null);
                 setEditingVehicleId(null);
               }}
-              className={`flex items-center gap-2 px-6 py-3 rounded-xl font-black uppercase tracking-widest text-[11px] transition-all duration-300 ${
-                isAddingVehicle 
-                  ? 'bg-rose-500/20 text-rose-500 border border-rose-500/40 hover:bg-rose-500/30 active:scale-95' 
+              className={`flex items-center gap-2 px-6 py-3 rounded-xl font-black uppercase tracking-widest text-[11px] transition-all duration-300 ${isAddingVehicle
+                  ? 'bg-rose-500/20 text-rose-500 border border-rose-500/40 hover:bg-rose-500/30 active:scale-95'
                   : 'bg-primary text-white hover:bg-primary/90 shadow-[0_0_20px_rgba(var(--primary),0.3)] active:scale-95'
-              }`}
+                }`}
             >
               {isAddingVehicle ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
               {isAddingVehicle ? 'Cancel Mode' : 'Deploy Vehicle'}
             </button>
 
-            <button 
+            <button
               onClick={() => {
                 setIsAddingRoadblock(!isAddingRoadblock);
                 setNewRoadblock(null);
                 setEditingRoadblockId(null);
               }}
-              className={`flex items-center gap-2 px-6 py-3 rounded-xl font-black uppercase tracking-widest text-[11px] transition-all duration-300 ${
-                isAddingRoadblock 
-                  ? 'bg-rose-500/20 text-rose-500 border border-rose-500/40 hover:bg-rose-500/30 active:scale-95' 
+              className={`flex items-center gap-2 px-6 py-3 rounded-xl font-black uppercase tracking-widest text-[11px] transition-all duration-300 ${isAddingRoadblock
+                  ? 'bg-rose-500/20 text-rose-500 border border-rose-500/40 hover:bg-rose-500/30 active:scale-95'
                   : 'bg-primary text-white hover:bg-primary/90 shadow-[0_0_20px_rgba(var(--primary),0.3)] active:scale-95'
-              }`}
+                }`}
             >
               {isAddingRoadblock ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
               {isAddingRoadblock ? 'Cancel Mode' : 'Deploy Roadblock'}
@@ -738,31 +736,30 @@ export const AdminTrafficMap: React.FC = () => {
                         <span className="text-[9px] font-black text-muted-foreground uppercase">NODE ID</span>
                         <span className="text-[11px] font-mono text-primary">#{signal.id.toString().padStart(4, '0')}</span>
                       </div>
-                      <div className={`px-2 py-0.5 rounded text-[9px] font-black uppercase ${
-                        signal.congestionLevel === 'low' ? 'bg-emerald-500/10 text-emerald-500' :
-                        signal.congestionLevel === 'medium' ? 'bg-amber-500/10 text-amber-500' :
-                        'bg-rose-500/10 text-rose-500'
-                      }`}>
+                      <div className={`px-2 py-0.5 rounded text-[9px] font-black uppercase ${signal.congestionLevel === 'low' ? 'bg-emerald-500/10 text-emerald-500' :
+                          signal.congestionLevel === 'medium' ? 'bg-amber-500/10 text-amber-500' :
+                            'bg-rose-500/10 text-rose-500'
+                        }`}>
                         {signal.congestionLevel} Density
                       </div>
                     </div>
-                    
+
                     <h3 className="text-lg font-bold mb-4">{signal.name}</h3>
-                    
+
                     <button
-                      onClick={() => navigate('/admin/signals', { 
-                        state: { 
+                      onClick={() => navigate('/admin/signals', {
+                        state: {
                           signalId: signal.id,
                           signalName: signal.name,
                           congestionLevel: signal.congestionLevel
-                        } 
+                        }
                       })}
                       className="w-full mb-4 py-2 bg-primary/20 hover:bg-primary/30 text-primary border border-primary/50 rounded-lg font-bold uppercase text-[10px] tracking-widest flex items-center justify-center gap-2 transition-all"
                     >
                       <SettingsIcon className="w-3 h-3" />
                       Control Signal
                     </button>
-                    
+
                     <div className="space-y-6">
                       <div>
                         <p className="text-[10px] font-black text-muted-foreground uppercase mb-3 tracking-widest">Adjust Capacity</p>
@@ -771,29 +768,28 @@ export const AdminTrafficMap: React.FC = () => {
                             <button
                               key={level}
                               onClick={() => handleUpdateCongestion(signal.id, level)}
-                              className={`flex-1 py-2 text-[9px] font-black rounded-lg border transition-all ${
-                                signal.congestionLevel === level 
-                                  ? level === 'low' ? 'bg-emerald-500 text-black border-emerald-500' : 
-                                    level === 'medium' ? 'bg-amber-500 text-black border-amber-500' : 
-                                    'bg-rose-500 text-white border-rose-500'
+                              className={`flex-1 py-2 text-[9px] font-black rounded-lg border transition-all ${signal.congestionLevel === level
+                                  ? level === 'low' ? 'bg-emerald-500 text-black border-emerald-500' :
+                                    level === 'medium' ? 'bg-amber-500 text-black border-amber-500' :
+                                      'bg-rose-500 text-white border-rose-500'
                                   : 'bg-white/5 border-white/10 hover:bg-white/10 text-white/40'
-                              }`}
+                                }`}
                             >
                               {level.toUpperCase()}
                             </button>
                           ))}
                         </div>
                       </div>
-                      
+
                       <div className="pt-4 border-t border-white/5 flex flex-col gap-3">
                         {deletingId === signal.id ? (
-                          <div 
+                          <div
                             className="bg-rose-500/10 border border-rose-500/20 p-2 rounded-xl flex items-center justify-between animate-in fade-in zoom-in-95"
                             onClick={(e) => e.stopPropagation()}
                           >
                             <span className="text-[10px] font-black text-rose-500 uppercase tracking-tighter">Decommission?</span>
                             <div className="flex gap-2">
-                              <button 
+                              <button
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   handleDeleteSignal(signal.id);
@@ -802,7 +798,7 @@ export const AdminTrafficMap: React.FC = () => {
                               >
                                 {isDeleting ? <Loader2 className="w-3 h-3 animate-spin" /> : 'YES'}
                               </button>
-                              <button 
+                              <button
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setDeletingId(null);
@@ -814,7 +810,7 @@ export const AdminTrafficMap: React.FC = () => {
                             </div>
                           </div>
                         ) : (
-                          <button 
+                          <button
                             onClick={(e) => {
                               // CRITICAL: Stop propagation to keep popup open
                               e.stopPropagation();
@@ -870,13 +866,12 @@ export const AdminTrafficMap: React.FC = () => {
                         <div>
                           <label className="text-[10px] font-black text-muted-foreground tracking-widest uppercase">Priority</label>
                           <div className="grid grid-cols-3 gap-2 mt-2">
-                            {(['low','medium','high'] as const).map(level => (
+                            {(['low', 'medium', 'high'] as const).map(level => (
                               <button
                                 key={level}
                                 onClick={() => setEditingForm({ ...editingForm, priority: level })}
-                                className={`py-2 rounded-lg border text-[9px] font-black transition-all ${
-                                  editingForm.priority === level ? (level === 'low' ? 'bg-emerald-500 border-emerald-500 text-black' : level === 'medium' ? 'bg-amber-500 border-amber-500 text-black' : 'bg-rose-500 border-rose-500 text-white') : 'bg-white/5 border-white/10 text-white/40 hover:bg-white/10'
-                                }`}
+                                className={`py-2 rounded-lg border text-[9px] font-black transition-all ${editingForm.priority === level ? (level === 'low' ? 'bg-emerald-500 border-emerald-500 text-black' : level === 'medium' ? 'bg-amber-500 border-amber-500 text-black' : 'bg-rose-500 border-rose-500 text-white') : 'bg-white/5 border-white/10 text-white/40 hover:bg-white/10'
+                                  }`}
                               >
                                 {level.toUpperCase()}
                               </button>
@@ -1064,9 +1059,9 @@ export const AdminTrafficMap: React.FC = () => {
                         </div>
                       </div>
                     )}
-                </div>
-              </Popup>
-            </Marker>
+                  </div>
+                </Popup>
+              </Marker>
             ))}
 
             {newJunction && (
@@ -1107,8 +1102,8 @@ export const AdminTrafficMap: React.FC = () => {
                   <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
                     <div className="space-y-2">
                       <label className="text-[10px] font-black text-muted-foreground tracking-widest uppercase">Designation</label>
-                      <input 
-                        type="text" 
+                      <input
+                        type="text"
                         placeholder="NAME OF INTERSECTION"
                         value={formData.name}
                         onChange={e => setFormData({ ...formData, name: e.target.value })}
@@ -1123,11 +1118,10 @@ export const AdminTrafficMap: React.FC = () => {
                           <button
                             key={level}
                             onClick={() => setFormData({ ...formData, congestionLevel: level })}
-                            className={`py-2 rounded-lg border text-[9px] font-black transition-all ${
-                              formData.congestionLevel === level 
-                              ? 'bg-primary border-primary text-white' 
-                              : 'bg-white/5 border-white/10 text-white/40 hover:bg-white/10'
-                            }`}
+                            className={`py-2 rounded-lg border text-[9px] font-black transition-all ${formData.congestionLevel === level
+                                ? 'bg-primary border-primary text-white'
+                                : 'bg-white/5 border-white/10 text-white/40 hover:bg-white/10'
+                              }`}
                           >
                             {level.toUpperCase()}
                           </button>
@@ -1147,13 +1141,13 @@ export const AdminTrafficMap: React.FC = () => {
                     </div>
 
                     <div className="pt-2 flex gap-3">
-                      <button 
+                      <button
                         onClick={() => setNewJunction(null)}
                         className="flex-1 py-3 bg-white/5 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-white/10 transition-colors"
                       >
                         Reset
                       </button>
-                      <button 
+                      <button
                         disabled={!formData.name}
                         onClick={handleCreateJunction}
                         className="flex-[2] py-3 bg-primary text-white text-[10px] font-black uppercase tracking-widest rounded-xl shadow-lg shadow-primary/20 hover:bg-primary/90 disabled:opacity-30 active:scale-95 transition-all"
@@ -1195,13 +1189,12 @@ export const AdminTrafficMap: React.FC = () => {
                     <div className="space-y-2">
                       <label className="text-[10px] font-black text-muted-foreground tracking-widest uppercase">Type</label>
                       <div className="grid grid-cols-3 gap-2">
-                        {(['ambulance','firetruck','police'] as const).map(t => (
+                        {(['ambulance', 'firetruck', 'police'] as const).map(t => (
                           <button
                             key={t}
                             onClick={() => setVehicleForm({ ...vehicleForm, type: t })}
-                            className={`py-2 rounded-lg border text-[9px] font-black transition-all ${
-                              vehicleForm.type === t ? 'bg-rose-500 border-rose-500 text-white' : 'bg-white/5 border-white/10 text-white/40 hover:bg-white/10'
-                            }`}
+                            className={`py-2 rounded-lg border text-[9px] font-black transition-all ${vehicleForm.type === t ? 'bg-rose-500 border-rose-500 text-white' : 'bg-white/5 border-white/10 text-white/40 hover:bg-white/10'
+                              }`}
                           >
                             {t.toUpperCase()}
                           </button>
@@ -1223,13 +1216,12 @@ export const AdminTrafficMap: React.FC = () => {
                     <div className="space-y-2">
                       <label className="text-[10px] font-black text-muted-foreground tracking-widest uppercase">Priority</label>
                       <div className="grid grid-cols-3 gap-2">
-                        {(['low','medium','high'] as const).map(level => (
+                        {(['low', 'medium', 'high'] as const).map(level => (
                           <button
                             key={level}
                             onClick={() => setVehicleForm({ ...vehicleForm, priority: level })}
-                            className={`py-2 rounded-lg border text-[9px] font-black transition-all ${
-                              vehicleForm.priority === level ? (level === 'low' ? 'bg-emerald-500 border-emerald-500 text-black' : level === 'medium' ? 'bg-amber-500 border-amber-500 text-black' : 'bg-rose-500 border-rose-500 text-white') : 'bg-white/5 border-white/10 text-white/40 hover:bg-white/10'
-                            }`}
+                            className={`py-2 rounded-lg border text-[9px] font-black transition-all ${vehicleForm.priority === level ? (level === 'low' ? 'bg-emerald-500 border-emerald-500 text-black' : level === 'medium' ? 'bg-amber-500 border-amber-500 text-black' : 'bg-rose-500 border-rose-500 text-white') : 'bg-white/5 border-white/10 text-white/40 hover:bg-white/10'
+                              }`}
                           >
                             {level.toUpperCase()}
                           </button>
@@ -1338,11 +1330,11 @@ export const AdminTrafficMap: React.FC = () => {
           )}
         </div>
 
-        {/* Sidebar Statistics */} 
+        {/* Sidebar Statistics */}
         <div className="space-y-4">
           <div className="bg-[#0A0C10] border border-white/5 rounded-2xl p-6 shadow-2xl">
             <h2 className="text-xs font-black tracking-[0.3em] uppercase mb-8 text-primary">REAL-TIME TELEMETRY</h2>
-            
+
             <div className="space-y-6">
               <div className="flex flex-col gap-1">
                 <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">Active System Nodes</span>
@@ -1406,7 +1398,7 @@ export const AdminTrafficMap: React.FC = () => {
             </div>
             <h3 className="text-[9px] font-black uppercase tracking-[0.2em] text-primary">Security Protocol</h3>
             <p className="text-[10px] text-white/50 leading-relaxed font-bold uppercase tracking-tight">
-              Grid modifications require administrative elevation. Node deployment is permanent until manually decommissioned. 
+              Grid modifications require administrative elevation. Node deployment is permanent until manually decommissioned.
             </p>
           </div>
         </div>
@@ -1416,10 +1408,10 @@ export const AdminTrafficMap: React.FC = () => {
 };
 
 // Help icons
-const Activity = (props: any) => <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>;
-const Settings = (props: any) => <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.72V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.17a2 2 0 0 1 1-1.74l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>;
-const Shield = (props: any) => <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>;
-const Navigation = (props: any) => <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>;
+const Activity = (props: any) => <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2" /></svg>;
+const Settings = (props: any) => <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.72V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.17a2 2 0 0 1 1-1.74l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" /><circle cx="12" cy="12" r="3" /></svg>;
+const Shield = (props: any) => <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>;
+const Navigation = (props: any) => <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11" /></svg>;
 
 // Helper SVG Icon
 const MarkerIcon = ({ className }: { className?: string }) => (
