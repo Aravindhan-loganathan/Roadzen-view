@@ -43,8 +43,8 @@ const LocationMarker = ({ onMapClick }: { onMapClick: (lat: number, lng: number)
 export const AdminTrafficMap: React.FC = () => {
   const navigate = useNavigate();
   const [signals, setSignals] = useState<Signal[]>([]);
-  const [emergencyVehicles, setEmergencyVehicles] = useState<EmergencyVehicle[]>([]);
-  const [roadblocks, setRoadblocks] = useState<Roadblock[]>([]);
+  //const [emergencyVehicles, setEmergencyVehicles] = useState<EmergencyVehicle[]>([]);
+  //const [roadblocks, setRoadblocks] = useState<Roadblock[]>([]);
   const [loading, setLoading] = useState(true);
   const [newJunction, setNewJunction] = useState<{ lat: number; lng: number } | null>(null);
   const [isAdding, setIsAdding] = useState(false);
@@ -123,7 +123,7 @@ export const AdminTrafficMap: React.FC = () => {
     } catch (e) {
       console.error('Emergency Vehicles Load Error:', e);
     }
-  };
+  };*/
 
   // Delete emergency vehicle (admin action) - no browser confirm, inline spinner
   const handleDeleteEmergency = async (id: number) => {
@@ -138,7 +138,7 @@ export const AdminTrafficMap: React.FC = () => {
       });
 
       if (res.ok) {
-        setEmergencyVehicles(prev => prev.filter(e => e.id !== id));
+        // setEmergencyVehicles(prev => prev.filter(e => e.id !== id));
         setSuccess('Emergency vehicle removed');
       } else {
         const err = await res.json().catch(() => ({}));
@@ -153,7 +153,7 @@ export const AdminTrafficMap: React.FC = () => {
   };
 
   // ---- Roadblocks: fetch / create / edit / delete ----
-  const fetchRoadblocks = async () => {
+  /*const fetchRoadblocks = async () => {
     try {
       const token = localStorage.getItem('traffic_token');
       const res = await fetch('http://localhost:3000/api/roadblocks', {
@@ -172,7 +172,7 @@ export const AdminTrafficMap: React.FC = () => {
     } catch (e) {
       console.error('Roadblocks Load Error:', e);
     }
-  };
+  };*/
 
   const handleCreateRoadblock = async () => {
     if (!newRoadblock || !roadblockForm.reason) {
@@ -197,12 +197,12 @@ export const AdminTrafficMap: React.FC = () => {
       if (res.ok) {
         const created = await res.json();
         const row = created.data || created;
-        setRoadblocks(prev => [...prev, {
+        /*setRoadblocks(prev => [...prev, {
           id: row.id,
           reason: row.reason,
           lat: parseFloat(row.latitude ?? row.lat ?? newRoadblock.lat),
           lng: parseFloat(row.longitude ?? row.lng ?? newRoadblock.lng),
-        }]);
+        }]);*/
         setNewRoadblock(null);
         setRoadblockForm({ reason: '' });
         setIsAddingRoadblock(false);
@@ -230,14 +230,14 @@ export const AdminTrafficMap: React.FC = () => {
     if (!editingRoadblockForm) return setError('No edits to save');
 
     // optimistic update
-    const previous = roadblocks.find(rb => rb.id === id);
+    /*const previous = roadblocks.find(rb => rb.id === id);
     setRoadblocks(prev => prev.map(rb => rb.id === id ? {
       ...rb,
       reason: editingRoadblockForm.reason ?? rb.reason,
       lat: editingRoadblockForm.lat ?? rb.lat,
       lng: editingRoadblockForm.lng ?? rb.lng,
       is_active: editingRoadblockForm.is_active ?? rb.is_active,
-    } : rb));
+    } : rb));*/
 
     try {
       const token = localStorage.getItem('traffic_token');
@@ -261,13 +261,13 @@ export const AdminTrafficMap: React.FC = () => {
       if (res.ok) {
         const data = await res.json();
         const row = data.data || data;
-        setRoadblocks(prev => prev.map(rb => rb.id === id ? {
+        /*setRoadblocks(prev => prev.map(rb => rb.id === id ? {
           ...rb,
           reason: row.reason ?? editingRoadblockForm.reason ?? rb.reason,
           lat: parseFloat(row.latitude ?? row.lat ?? editingRoadblockForm.lat ?? rb.lat),
           lng: parseFloat(row.longitude ?? row.lng ?? editingRoadblockForm.lng ?? rb.lng),
           is_active: row.is_active ?? editingRoadblockForm.is_active ?? rb.is_active,
-        } : rb));
+        } : rb));*/
         setSuccess('Roadblock updated');
         setEditingRoadblockId(null);
         setEditingRoadblockForm(null);
@@ -276,16 +276,16 @@ export const AdminTrafficMap: React.FC = () => {
         const err = await res.json().catch(() => ({}));
         setError(err.message || 'Update failed');
         // revert
-        if (previous) setRoadblocks(prev => prev.map(rb => rb.id === id ? previous : rb));
+        // if (previous) setRoadblocks(prev => prev.map(rb => rb.id === id ? previous : rb));
       }
     } catch (e) {
       setError('Network error while updating roadblock');
       // revert
-      if (previous) setRoadblocks(prev => prev.map(rb => rb.id === id ? previous : rb));
+      // if (previous) setRoadblocks(prev => prev.map(rb => rb.id === id ? previous : rb));
     }
 
     // ensure back-end sync
-    fetchRoadblocks();
+    // fetchRoadblocks();
   };
 
   const handleDeleteRoadblock = async (id: number) => {
@@ -300,7 +300,7 @@ export const AdminTrafficMap: React.FC = () => {
       });
 
       if (res.ok) {
-        setRoadblocks(prev => prev.filter(rb => rb.id !== id));
+        // setRoadblocks(prev => prev.filter(rb => rb.id !== id));
         setSuccess('Roadblock removed');
       } else {
         const err = await res.json().catch(() => ({}));
@@ -339,14 +339,14 @@ export const AdminTrafficMap: React.FC = () => {
       if (res.ok) {
         const created = await res.json();
         const row = created.data || created;
-        setEmergencyVehicles(prev => [...prev, {
+        /*setEmergencyVehicles(prev => [...prev, {
           id: row.id,
           type: row.type,
           identifier: row.identifier,
           priority: row.priority,
           lat: parseFloat(row.latitude ?? row.lat ?? newVehicle.lat),
           lng: parseFloat(row.longitude ?? row.lng ?? newVehicle.lng),
-        }]);
+        }]);*/
         setNewVehicle(null);
         setVehicleForm({ type: 'ambulance', identifier: '', priority: 'medium' });
         setIsAddingVehicle(false);
@@ -374,7 +374,7 @@ export const AdminTrafficMap: React.FC = () => {
     if (!editingForm) return setError('No edits to save');
 
     // optimistic UI update
-    const previous = emergencyVehicles.find(ev => ev.id === id);
+    /*const previous = emergencyVehicles.find(ev => ev.id === id);
     setEmergencyVehicles(prev => prev.map(ev => ev.id === id ? {
       ...ev,
       type: editingForm.type ?? ev.type,
@@ -382,7 +382,7 @@ export const AdminTrafficMap: React.FC = () => {
       priority: editingForm.priority ?? ev.priority,
       lat: editingForm.lat ?? ev.lat,
       lng: editingForm.lng ?? ev.lng,
-    } : ev));
+    } : ev));*/
 
     try {
       const token = localStorage.getItem('traffic_token');
@@ -407,14 +407,14 @@ export const AdminTrafficMap: React.FC = () => {
       if (res.ok) {
         const data = await res.json();
         const row = data.data || data;
-        setEmergencyVehicles(prev => prev.map(ev => ev.id === id ? {
+        /*setEmergencyVehicles(prev => prev.map(ev => ev.id === id ? {
           ...ev,
           type: row.type ?? editingForm.type ?? ev.type,
           identifier: row.identifier ?? editingForm.identifier ?? ev.identifier,
           priority: row.priority ?? editingForm.priority ?? ev.priority,
           lat: parseFloat(row.latitude ?? row.lat ?? editingForm.lat ?? ev.lat),
           lng: parseFloat(row.longitude ?? row.lng ?? editingForm.lng ?? ev.lng),
-        } : ev));
+        } : ev));*/
         setSuccess('Emergency vehicle updated');
         setEditingVehicleId(null);
         setEditingForm(null);
@@ -423,16 +423,16 @@ export const AdminTrafficMap: React.FC = () => {
         const err = await res.json().catch(() => ({}));
         setError(err.message || 'Update failed');
         // revert
-        if (previous) setEmergencyVehicles(prev => prev.map(ev => ev.id === id ? previous : ev));
+        // if (previous) setEmergencyVehicles(prev => prev.map(ev => ev.id === id ? previous : ev));
       }
     } catch (e) {
       setError('Network error while updating vehicle');
       // revert
-      if (previous) setEmergencyVehicles(prev => prev.map(ev => ev.id === id ? previous : ev));
+      // if (previous) setEmergencyVehicles(prev => prev.map(ev => ev.id === id ? previous : ev));
     }
 
     // ensure back-end sync
-    fetchEmergencyVehicles();
+    //fetchEmergencyVehicles();
   };
 
   const fetchSignals = async () => {
@@ -454,14 +454,14 @@ export const AdminTrafficMap: React.FC = () => {
 
   useEffect(() => {
     fetchSignals();
-    fetchEmergencyVehicles();
-    fetchRoadblocks();
+    // fetchEmergencyVehicles();
+    // fetchRoadblocks();
     fetchDashboardSummary();
 
     // Poll emergency vehicle locations and roadblocks every 5s to simulate live movement
     const pollInterval = setInterval(() => {
-      fetchEmergencyVehicles();
-      fetchRoadblocks();
+      // fetchEmergencyVehicles();
+      // fetchRoadblocks();
       fetchDashboardSummary();
       fetchSignals();
     }, 5000);
@@ -626,7 +626,7 @@ export const AdminTrafficMap: React.FC = () => {
             <h1 className="text-2xl font-display font-black tracking-tighttext-gray-900 dark:text-white">GRID CONTROL</h1>
             <div className="flex items-center gap-2 text-[10px] text-muted-foreground font-bold uppercase tracking-widest">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-              System Online • {signals.length} Nodes • {emergencyVehicles.length} Emergency Vehicles • {roadblocks.length} Roadblocks
+              System Online • {signals.length} Nodes {/* • {emergencyVehicles.length} Emergency Vehicles • {roadblocks.length} Roadblocks */}
             </div>
           </div>
         </div>
@@ -830,7 +830,7 @@ export const AdminTrafficMap: React.FC = () => {
             ))}
 
             {/* Emergency Vehicles */}
-            {emergencyVehicles.map(ev => (
+            {/*emergencyVehicles.map(ev => (
               <Marker
                 key={`ev-${ev.id}`}
                 position={[ev.lat, ev.lng]}
@@ -955,10 +955,10 @@ export const AdminTrafficMap: React.FC = () => {
                   </div>
                 </Popup>
               </Marker>
-            ))}
+            ))}*/}
 
             {/* Roadblocks */}
-            {roadblocks.map(rb => (
+            {/*roadblocks.map(rb => (
               <Marker
                 key={`rb-${rb.id}`}
                 position={[rb.lat, rb.lng]}
@@ -1059,9 +1059,9 @@ export const AdminTrafficMap: React.FC = () => {
                         </div>
                       </div>
                     )}
-                  </div>
-                </Popup>
-              </Marker>
+                </div>
+              </Popup>
+            </Marker>
             ))}
 
             {newJunction && (
@@ -1076,258 +1076,258 @@ export const AdminTrafficMap: React.FC = () => {
           </MapContainer>
 
           {/* Deployment Assistant Card */}
-          {isAdding && (
-            <div className="absolute top-6 left-6 z-[1000] w-80 animate-in slide-in-from-left duration-500">
-              <div className="bg-[#0A0C10]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl p-6">
-                <div className="flex items-center justify-between mb-8 pb-4 border-b border-white/5">
-                  <h2 className="text-xl font-black text-white flex items-center gap-2">
-                    <div className="w-2.5 h-2.5 rounded-full bg-primary animate-ping" />
-                    DEPLOYMENT
-                  </h2>
-                  <button onClick={() => setIsAdding(false)} className="p-1 hover:bg-white/5 rounded-lg transition-colors">
-                    <X className="w-4 h-4 text-muted-foreground" />
-                  </button>
+            {isAdding && (
+              <div className="absolute top-6 left-6 z-[1000] w-80 animate-in slide-in-from-left duration-500">
+                <div className="bg-[#0A0C10]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl p-6">
+                  <div className="flex items-center justify-between mb-8 pb-4 border-b border-white/5">
+                    <h2 className="text-xl font-black text-white flex items-center gap-2">
+                      <div className="w-2.5 h-2.5 rounded-full bg-primary animate-ping" />
+                      DEPLOYMENT
+                    </h2>
+                    <button onClick={() => setIsAdding(false)} className="p-1 hover:bg-white/5 rounded-lg transition-colors">
+                      <X className="w-4 h-4 text-muted-foreground" />
+                    </button>
+                  </div>
+
+                  {!newJunction ? (
+                    <div className="flex flex-col items-center gap-6 py-4">
+                      <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center border border-primary/20 animate-pulse">
+                        <Navigation className="w-8 h-8 text-primary" />
+                      </div>
+                      <p className="text-center text-[10px] font-black tracking-widest text-muted-foreground leading-relaxed uppercase">
+                        Select target coordinates on the active grid map to begin deployment.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-muted-foreground tracking-widest uppercase">Designation</label>
+                        <input
+                          type="text"
+                          placeholder="NAME OF INTERSECTION"
+                          value={formData.name}
+                          onChange={e => setFormData({ ...formData, name: e.target.value })}
+                          className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-primary/50 outline-none transition-all placeholder:text-white/10"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-muted-foreground tracking-widest uppercase">Load Status</label>
+                        <div className="grid grid-cols-3 gap-2">
+                          {(['low', 'medium', 'high'] as const).map(level => (
+                            <button
+                              key={level}
+                              onClick={() => setFormData({ ...formData, congestionLevel: level })}
+                              className={`py-2 rounded-lg border text-[9px] font-black transition-all ${formData.congestionLevel === level
+                                  ? 'bg-primary border-primary text-white'
+                                  : 'bg-white/5 border-white/10 text-white/40 hover:bg-white/10'
+                                }`}
+                            >
+                              {level.toUpperCase()}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="bg-white/5 p-4 rounded-xl border border-white/5 space-y-1 group hover:border-primary/20 transition-colors">
+                        <div className="flex justify-between items-center text-[9px]">
+                          <span className="text-muted-foreground font-black">LATITUDE</span>
+                          <span className="text-primary font-mono">{newJunction.lat.toFixed(6)}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-[9px]">
+                          <span className="text-muted-foreground font-black">LONGITUDE</span>
+                          <span className="text-primary font-mono">{newJunction.lng.toFixed(6)}</span>
+                        </div>
+                      </div>
+
+                      <div className="pt-2 flex gap-3">
+                        <button
+                          onClick={() => setNewJunction(null)}
+                          className="flex-1 py-3 bg-white/5 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-white/10 transition-colors"
+                        >
+                          Reset
+                        </button>
+                        <button
+                          disabled={!formData.name}
+                          onClick={handleCreateJunction}
+                          className="flex-[2] py-3 bg-primary text-white text-[10px] font-black uppercase tracking-widest rounded-xl shadow-lg shadow-primary/20 hover:bg-primary/90 disabled:opacity-30 active:scale-95 transition-all"
+                        >
+                          Initialize
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
-
-                {!newJunction ? (
-                  <div className="flex flex-col items-center gap-6 py-4">
-                    <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center border border-primary/20 animate-pulse">
-                      <Navigation className="w-8 h-8 text-primary" />
-                    </div>
-                    <p className="text-center text-[10px] font-black tracking-widest text-muted-foreground leading-relaxed uppercase">
-                      Select target coordinates on the active grid map to begin deployment.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-muted-foreground tracking-widest uppercase">Designation</label>
-                      <input
-                        type="text"
-                        placeholder="NAME OF INTERSECTION"
-                        value={formData.name}
-                        onChange={e => setFormData({ ...formData, name: e.target.value })}
-                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-primary/50 outline-none transition-all placeholder:text-white/10"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-muted-foreground tracking-widest uppercase">Load Status</label>
-                      <div className="grid grid-cols-3 gap-2">
-                        {(['low', 'medium', 'high'] as const).map(level => (
-                          <button
-                            key={level}
-                            onClick={() => setFormData({ ...formData, congestionLevel: level })}
-                            className={`py-2 rounded-lg border text-[9px] font-black transition-all ${formData.congestionLevel === level
-                                ? 'bg-primary border-primary text-white'
-                                : 'bg-white/5 border-white/10 text-white/40 hover:bg-white/10'
-                              }`}
-                          >
-                            {level.toUpperCase()}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="bg-white/5 p-4 rounded-xl border border-white/5 space-y-1 group hover:border-primary/20 transition-colors">
-                      <div className="flex justify-between items-center text-[9px]">
-                        <span className="text-muted-foreground font-black">LATITUDE</span>
-                        <span className="text-primary font-mono">{newJunction.lat.toFixed(6)}</span>
-                      </div>
-                      <div className="flex justify-between items-center text-[9px]">
-                        <span className="text-muted-foreground font-black">LONGITUDE</span>
-                        <span className="text-primary font-mono">{newJunction.lng.toFixed(6)}</span>
-                      </div>
-                    </div>
-
-                    <div className="pt-2 flex gap-3">
-                      <button
-                        onClick={() => setNewJunction(null)}
-                        className="flex-1 py-3 bg-white/5 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-white/10 transition-colors"
-                      >
-                        Reset
-                      </button>
-                      <button
-                        disabled={!formData.name}
-                        onClick={handleCreateJunction}
-                        className="flex-[2] py-3 bg-primary text-white text-[10px] font-black uppercase tracking-widest rounded-xl shadow-lg shadow-primary/20 hover:bg-primary/90 disabled:opacity-30 active:scale-95 transition-all"
-                      >
-                        Initialize
-                      </button>
-                    </div>
-                  </div>
-                )}
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Emergency Deploy Assistant Card */}
-          {isAddingVehicle && (
-            <div className="absolute top-6 right-6 z-[1000] w-80 animate-in slide-in-from-right duration-500">
-              <div className="bg-[#0A0C10]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl p-6">
-                <div className="flex items-center justify-between mb-8 pb-4 border-b border-white/5">
-                  <h2 className="text-xl font-black text-white flex items-center gap-2">
-                    <div className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping" />
-                    EMERGENCY DEPLOY
-                  </h2>
-                  <button onClick={() => setIsAddingVehicle(false)} className="p-1 hover:bg-white/5 rounded-lg transition-colors">
-                    <X className="w-4 h-4 text-muted-foreground" />
-                  </button>
+            {/* Emergency Deploy Assistant Card */}
+            {isAddingVehicle && (
+              <div className="absolute top-6 right-6 z-[1000] w-80 animate-in slide-in-from-right duration-500">
+                <div className="bg-[#0A0C10]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl p-6">
+                  <div className="flex items-center justify-between mb-8 pb-4 border-b border-white/5">
+                    <h2 className="text-xl font-black text-white flex items-center gap-2">
+                      <div className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping" />
+                      EMERGENCY DEPLOY
+                    </h2>
+                    <button onClick={() => setIsAddingVehicle(false)} className="p-1 hover:bg-white/5 rounded-lg transition-colors">
+                      <X className="w-4 h-4 text-muted-foreground" />
+                    </button>
+                  </div>
+
+                  {!newVehicle ? (
+                    <div className="flex flex-col items-center gap-6 py-4">
+                      <div className="w-16 h-16 rounded-full bg-rose-500/10 flex items-center justify-center border border-rose-500/20 animate-pulse">
+                        <div className="w-8 h-8 text-rose-500 text-2xl">🚑</div>
+                      </div>
+                      <p className="text-center text-[10px] font-black tracking-widest text-muted-foreground leading-relaxed uppercase">
+                        Select target coordinates on the active grid map to set vehicle location.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-muted-foreground tracking-widest uppercase">Type</label>
+                        <div className="grid grid-cols-3 gap-2">
+                          {(['ambulance', 'firetruck', 'police'] as const).map(t => (
+                            <button
+                              key={t}
+                              onClick={() => setVehicleForm({ ...vehicleForm, type: t })}
+                              className={`py-2 rounded-lg border text-[9px] font-black transition-all ${vehicleForm.type === t ? 'bg-rose-500 border-rose-500 text-white' : 'bg-white/5 border-white/10 text-white/40 hover:bg-white/10'
+                                }`}
+                            >
+                              {t.toUpperCase()}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-muted-foreground tracking-widest uppercase">Identifier</label>
+                        <input
+                          type="text"
+                          placeholder="E.g., AMB-123"
+                          value={vehicleForm.identifier}
+                          onChange={e => setVehicleForm({ ...vehicleForm, identifier: e.target.value })}
+                          className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-rose-500/50 outline-none transition-all placeholder:text-white/10"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-muted-foreground tracking-widest uppercase">Priority</label>
+                        <div className="grid grid-cols-3 gap-2">
+                          {(['low', 'medium', 'high'] as const).map(level => (
+                            <button
+                              key={level}
+                              onClick={() => setVehicleForm({ ...vehicleForm, priority: level })}
+                              className={`py-2 rounded-lg border text-[9px] font-black transition-all ${vehicleForm.priority === level ? (level === 'low' ? 'bg-emerald-500 border-emerald-500 text-black' : level === 'medium' ? 'bg-amber-500 border-amber-500 text-black' : 'bg-rose-500 border-rose-500 text-white') : 'bg-white/5 border-white/10 text-white/40 hover:bg-white/10'
+                                }`}
+                            >
+                              {level.toUpperCase()}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="bg-white/5 p-4 rounded-xl border border-white/5 space-y-1 group hover:border-rose-500/20 transition-colors">
+                        <div className="flex justify-between items-center text-[9px]">
+                          <span className="text-muted-foreground font-black">LATITUDE</span>
+                          <span className="text-primary font-mono">{newVehicle.lat.toFixed(6)}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-[9px]">
+                          <span className="text-muted-foreground font-black">LONGITUDE</span>
+                          <span className="text-primary font-mono">{newVehicle.lng.toFixed(6)}</span>
+                        </div>
+                      </div>
+
+                      <div className="pt-2 flex gap-3">
+                        <button
+                          onClick={() => setNewVehicle(null)}
+                          className="flex-1 py-3 bg-white/5 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-white/10 transition-colors"
+                        >
+                          Reset
+                        </button>
+                        <button
+                          disabled={!vehicleForm.identifier}
+                          onClick={handleCreateEmergencyVehicle}
+                          className="flex-[2] py-3 bg-rose-500 text-white text-[10px] font-black uppercase tracking-widest rounded-xl shadow-lg shadow-rose-500/20 hover:bg-rose-600 disabled:opacity-30 active:scale-95 transition-all"
+                        >
+                          Initialize Vehicle
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
-
-                {!newVehicle ? (
-                  <div className="flex flex-col items-center gap-6 py-4">
-                    <div className="w-16 h-16 rounded-full bg-rose-500/10 flex items-center justify-center border border-rose-500/20 animate-pulse">
-                      <div className="w-8 h-8 text-rose-500 text-2xl">🚑</div>
-                    </div>
-                    <p className="text-center text-[10px] font-black tracking-widest text-muted-foreground leading-relaxed uppercase">
-                      Select target coordinates on the active grid map to set vehicle location.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-muted-foreground tracking-widest uppercase">Type</label>
-                      <div className="grid grid-cols-3 gap-2">
-                        {(['ambulance', 'firetruck', 'police'] as const).map(t => (
-                          <button
-                            key={t}
-                            onClick={() => setVehicleForm({ ...vehicleForm, type: t })}
-                            className={`py-2 rounded-lg border text-[9px] font-black transition-all ${vehicleForm.type === t ? 'bg-rose-500 border-rose-500 text-white' : 'bg-white/5 border-white/10 text-white/40 hover:bg-white/10'
-                              }`}
-                          >
-                            {t.toUpperCase()}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-muted-foreground tracking-widest uppercase">Identifier</label>
-                      <input
-                        type="text"
-                        placeholder="E.g., AMB-123"
-                        value={vehicleForm.identifier}
-                        onChange={e => setVehicleForm({ ...vehicleForm, identifier: e.target.value })}
-                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-rose-500/50 outline-none transition-all placeholder:text-white/10"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-muted-foreground tracking-widest uppercase">Priority</label>
-                      <div className="grid grid-cols-3 gap-2">
-                        {(['low', 'medium', 'high'] as const).map(level => (
-                          <button
-                            key={level}
-                            onClick={() => setVehicleForm({ ...vehicleForm, priority: level })}
-                            className={`py-2 rounded-lg border text-[9px] font-black transition-all ${vehicleForm.priority === level ? (level === 'low' ? 'bg-emerald-500 border-emerald-500 text-black' : level === 'medium' ? 'bg-amber-500 border-amber-500 text-black' : 'bg-rose-500 border-rose-500 text-white') : 'bg-white/5 border-white/10 text-white/40 hover:bg-white/10'
-                              }`}
-                          >
-                            {level.toUpperCase()}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="bg-white/5 p-4 rounded-xl border border-white/5 space-y-1 group hover:border-rose-500/20 transition-colors">
-                      <div className="flex justify-between items-center text-[9px]">
-                        <span className="text-muted-foreground font-black">LATITUDE</span>
-                        <span className="text-primary font-mono">{newVehicle.lat.toFixed(6)}</span>
-                      </div>
-                      <div className="flex justify-between items-center text-[9px]">
-                        <span className="text-muted-foreground font-black">LONGITUDE</span>
-                        <span className="text-primary font-mono">{newVehicle.lng.toFixed(6)}</span>
-                      </div>
-                    </div>
-
-                    <div className="pt-2 flex gap-3">
-                      <button
-                        onClick={() => setNewVehicle(null)}
-                        className="flex-1 py-3 bg-white/5 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-white/10 transition-colors"
-                      >
-                        Reset
-                      </button>
-                      <button
-                        disabled={!vehicleForm.identifier}
-                        onClick={handleCreateEmergencyVehicle}
-                        className="flex-[2] py-3 bg-rose-500 text-white text-[10px] font-black uppercase tracking-widest rounded-xl shadow-lg shadow-rose-500/20 hover:bg-rose-600 disabled:opacity-30 active:scale-95 transition-all"
-                      >
-                        Initialize Vehicle
-                      </button>
-                    </div>
-                  </div>
-                )}
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Roadblock Deploy Assistant Card */}
-          {isAddingRoadblock && (
-            <div className="absolute bottom-6 right-6 z-[1000] w-80 animate-in slide-in-from-bottom duration-500">
-              <div className="bg-[#0A0C10]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl p-6">
-                <div className="flex items-center justify-between mb-8 pb-4 border-b border-white/5">
-                  <h2 className="text-xl font-black text-white flex items-center gap-2">
-                    <div className="w-2.5 h-2.5 rounded-full bg-yellow-500 animate-ping" />
-                    ROADBLOCK DEPLOY
-                  </h2>
-                  <button onClick={() => setIsAddingRoadblock(false)} className="p-1 hover:bg-white/5 rounded-lg transition-colors">
-                    <X className="w-4 h-4 text-muted-foreground" />
-                  </button>
+            {/* Roadblock Deploy Assistant Card */}
+            {isAddingRoadblock && (
+              <div className="absolute bottom-6 right-6 z-[1000] w-80 animate-in slide-in-from-bottom duration-500">
+                <div className="bg-[#0A0C10]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl p-6">
+                  <div className="flex items-center justify-between mb-8 pb-4 border-b border-white/5">
+                    <h2 className="text-xl font-black text-white flex items-center gap-2">
+                      <div className="w-2.5 h-2.5 rounded-full bg-yellow-500 animate-ping" />
+                      ROADBLOCK DEPLOY
+                    </h2>
+                    <button onClick={() => setIsAddingRoadblock(false)} className="p-1 hover:bg-white/5 rounded-lg transition-colors">
+                      <X className="w-4 h-4 text-muted-foreground" />
+                    </button>
+                  </div>
+
+                  {!newRoadblock ? (
+                    <div className="flex flex-col items-center gap-6 py-4">
+                      <div className="w-16 h-16 rounded-full bg-yellow-500/10 flex items-center justify-center border border-yellow-500/20 animate-pulse">
+                        <div className="w-8 h-8 text-yellow-500 text-2xl">🚧</div>
+                      </div>
+                      <p className="text-center text-[10px] font-black tracking-widest text-muted-foreground leading-relaxed uppercase">
+                        Select the roadblock location on the map to begin.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-muted-foreground tracking-widest uppercase">Reason</label>
+                        <input
+                          type="text"
+                          placeholder="Reason for block (e.g., Construction)"
+                          value={roadblockForm.reason}
+                          onChange={e => setRoadblockForm({ ...roadblockForm, reason: e.target.value })}
+                          className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-yellow-500/50 outline-none transition-all placeholder:text-white/10"
+                        />
+                      </div>
+
+                      <div className="bg-white/5 p-4 rounded-xl border border-white/5 space-y-1 group hover:border-yellow-500/20 transition-colors">
+                        <div className="flex justify-between items-center text-[9px]">
+                          <span className="text-muted-foreground font-black">LATITUDE</span>
+                          <span className="text-primary font-mono">{newRoadblock.lat.toFixed(6)}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-[9px]">
+                          <span className="text-muted-foreground font-black">LONGITUDE</span>
+                          <span className="text-primary font-mono">{newRoadblock.lng.toFixed(6)}</span>
+                        </div>
+                      </div>
+
+                      <div className="pt-2 flex gap-3">
+                        <button
+                          onClick={() => setNewRoadblock(null)}
+                          className="flex-1 py-3 bg-white/5 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-white/10 transition-colors"
+                        >
+                          Reset
+                        </button>
+                        <button
+                          disabled={!roadblockForm.reason}
+                          onClick={handleCreateRoadblock}
+                          className="flex-[2] py-3 bg-yellow-500 text-white text-[10px] font-black uppercase tracking-widest rounded-xl shadow-lg shadow-yellow-500/20 hover:bg-yellow-600 disabled:opacity-30 active:scale-95 transition-all"
+                        >
+                          Initialize Roadblock
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
-
-                {!newRoadblock ? (
-                  <div className="flex flex-col items-center gap-6 py-4">
-                    <div className="w-16 h-16 rounded-full bg-yellow-500/10 flex items-center justify-center border border-yellow-500/20 animate-pulse">
-                      <div className="w-8 h-8 text-yellow-500 text-2xl">🚧</div>
-                    </div>
-                    <p className="text-center text-[10px] font-black tracking-widest text-muted-foreground leading-relaxed uppercase">
-                      Select the roadblock location on the map to begin.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-muted-foreground tracking-widest uppercase">Reason</label>
-                      <input
-                        type="text"
-                        placeholder="Reason for block (e.g., Construction)"
-                        value={roadblockForm.reason}
-                        onChange={e => setRoadblockForm({ ...roadblockForm, reason: e.target.value })}
-                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-yellow-500/50 outline-none transition-all placeholder:text-white/10"
-                      />
-                    </div>
-
-                    <div className="bg-white/5 p-4 rounded-xl border border-white/5 space-y-1 group hover:border-yellow-500/20 transition-colors">
-                      <div className="flex justify-between items-center text-[9px]">
-                        <span className="text-muted-foreground font-black">LATITUDE</span>
-                        <span className="text-primary font-mono">{newRoadblock.lat.toFixed(6)}</span>
-                      </div>
-                      <div className="flex justify-between items-center text-[9px]">
-                        <span className="text-muted-foreground font-black">LONGITUDE</span>
-                        <span className="text-primary font-mono">{newRoadblock.lng.toFixed(6)}</span>
-                      </div>
-                    </div>
-
-                    <div className="pt-2 flex gap-3">
-                      <button
-                        onClick={() => setNewRoadblock(null)}
-                        className="flex-1 py-3 bg-white/5 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-white/10 transition-colors"
-                      >
-                        Reset
-                      </button>
-                      <button
-                        disabled={!roadblockForm.reason}
-                        onClick={handleCreateRoadblock}
-                        className="flex-[2] py-3 bg-yellow-500 text-white text-[10px] font-black uppercase tracking-widest rounded-xl shadow-lg shadow-yellow-500/20 hover:bg-yellow-600 disabled:opacity-30 active:scale-95 transition-all"
-                      >
-                        Initialize Roadblock
-                      </button>
-                    </div>
-                  </div>
-                )}
               </div>
-            </div>
-          )}
+            )}
         </div>
 
         {/* Sidebar Statistics */}

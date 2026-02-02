@@ -17,6 +17,7 @@ export interface RouteInfo {
   path: [number, number][];
   penalty?: number;
   signalIds: number[];
+  instructions?: string[];
 }
 
 interface MapContextType {
