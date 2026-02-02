@@ -10,6 +10,7 @@ import createTables from './db/setup';
 import reportRoutes from './routes/reportRoutes';
 import violationRoutes from './routes/violationRoutes';
 import savedLocations from './routes/savedLocations';
+import settingsRoutes from './routes/settingsRoutes';
 
 // Load environment variables
 dotenv.config();
@@ -18,7 +19,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Middleware
-app.use(cors({ origin: true, methods: ['GET','POST','PUT','DELETE','OPTIONS'], allowedHeaders: ['Content-Type', 'Authorization'] }));
+app.use(cors({ origin: true, methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], allowedHeaders: ['Content-Type', 'Authorization'] }));
 // Handle preflight requests globally via middleware (avoids route pattern parser issues)
 app.use((req, res, next) => {
   if (req.method === 'OPTIONS') {
@@ -41,6 +42,7 @@ app.use('/api/alerts', alertRoutes);
 app.use('/api', reportRoutes);
 app.use('/api', violationRoutes);
 app.use('/api/saved-locations', savedLocations);
+app.use('/api/settings', settingsRoutes);
 
 // Basic Route
 app.get('/', (req: Request, res: Response) => {
@@ -51,17 +53,17 @@ app.get('/', (req: Request, res: Response) => {
 app.get('/api/test-db', async (req: Request, res: Response) => {
   try {
     const result = await pool.query('SELECT NOW()');
-    res.json({ 
-      status: 'success', 
-      message: 'Database connection successful', 
-      timestamp: result.rows[0].now 
+    res.json({
+      status: 'success',
+      message: 'Database connection successful',
+      timestamp: result.rows[0].now
     });
   } catch (error) {
     console.error('Database connection error:', error);
-    res.status(500).json({ 
-      status: 'error', 
-      message: 'Database connection failed', 
-      error: error instanceof Error ? error.message : 'Unknown error' 
+    res.status(500).json({
+      status: 'error',
+      message: 'Database connection failed',
+      error: error instanceof Error ? error.message : 'Unknown error'
     });
   }
 });

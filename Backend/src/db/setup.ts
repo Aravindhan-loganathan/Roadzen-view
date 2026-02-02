@@ -77,12 +77,25 @@ const createTables = async () => {
     );
   `;
 
+  const systemSettingsTable = `
+    CREATE TABLE IF NOT EXISTS system_settings (
+      key VARCHAR(100) PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+  `;
+
   try {
     await pool.query(usersTable);
+    // Add columns for notification preferences
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS emergency_alerts_enabled BOOLEAN DEFAULT TRUE`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS system_alerts_enabled BOOLEAN DEFAULT TRUE`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS violation_alerts_enabled BOOLEAN DEFAULT FALSE`);
+
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS location VARCHAR(255)`);
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(50)`);
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS vehicle_number VARCHAR(50)`);
-    
+
     await pool.query(trafficSignalsTable);
 
     // Ensure columns exist if table was created previously without them
@@ -98,7 +111,7 @@ const createTables = async () => {
         ALTER TABLE traffic_signals ADD CONSTRAINT traffic_signals_congestion_level_check 
         CHECK (congestion_level IN ('LOW', 'MEDIUM', 'HIGH'));
       `);
-    } catch (e) {}
+    } catch (e) { }
 
 
 
@@ -106,6 +119,18 @@ const createTables = async () => {
     await pool.query(alertsTable);
     await pool.query(reportsTable);
     await pool.query(savedLocationsTable);
+    await pool.query(systemSettingsTable);
+
+    // Seed default system settings if table is empty
+    const settingsCheck = await pool.query('SELECT COUNT(*) FROM system_settings');
+    if (parseInt(settingsCheck.rows[0].count) === 0) {
+      await pool.query(`
+        INSERT INTO system_settings (key, value) VALUES 
+        ('refresh_interval', '5'),
+        ('ai_model', 'YOLOv8n'),
+        ('confidence_threshold', '85')
+      `);
+    }
 
     // Create indexes for better performance
     await pool.query('CREATE INDEX IF NOT EXISTS idx_reports_user_id ON reports(user_id)');
