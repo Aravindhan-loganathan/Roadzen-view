@@ -14,7 +14,7 @@
 
 **Roadzen View** is an end-to-end intelligent traffic monitoring and management system designed to reduce congestion, improve signal efficiency, and enhance emergency response in urban environments.
 
-[▶️ Watch Simulation Video](sum_sim_captures/sumo_sim%20ml%20model%20run.mp4)
+[▶️ Watch Simulation Video](sum_sim_captures/sim_sumo.gif)
 
 The platform integrates:
 
