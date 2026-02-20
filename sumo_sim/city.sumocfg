@@ -1,0 +1,18 @@
+<configuration>
+
+    <input>
+        <net-file value="city.net.xml"/>
+        <route-files value="fresh_routes.rou.xml"/>
+        <additional-files value="vtypes.add.xml"/>
+    </input>
+
+    <time>
+        <begin value="0"/>
+        <end value="3600"/>
+		<step-length value="0.05"/>
+    </time>
+	<processing>
+    <time-to-teleport value="-1"/>
+</processing>
+
+</configuration>

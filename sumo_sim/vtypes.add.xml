@@ -1,0 +1,36 @@
+<additional>
+
+    <!-- Bike -->
+    <vType id="bike"
+           vClass="motorcycle"
+           accel="3.5"
+           decel="4.5"
+           length="1.8"
+           maxSpeed="16"
+           probability="0.6"/>
+
+    <!-- Car -->
+    <vType id="car"
+           vClass="passenger"
+           accel="2.6"
+           length="4.5"
+           maxSpeed="18"
+           probability="0.25"/>
+
+    <!-- Auto rickshaw -->
+    <vType id="auto"
+           vClass="taxi"
+           accel="2.0"
+           length="3.0"
+           maxSpeed="14"
+           probability="0.1"/>
+
+    <!-- Bus -->
+    <vType id="bus"
+           vClass="bus"
+           accel="1.2"
+           length="10"
+           maxSpeed="12"
+           probability="0.05"/>
+
+</additional>
