@@ -97,12 +97,14 @@ export const LiveDetectionProvider: React.FC<{ children: ReactNode }> = ({ child
   const idMapping = useRef<Map<number, number>>(new Map());
   const nextId = useRef(1);
   const totalCountsRef = useRef<VehicleCounts>(initialCounts);
+  const lastSessionTotalRef = useRef(0);
 
   const resetStats = () => {
     setDetections([]);
     setCurrentCounts(initialCounts);
     setTotalCounts(initialCounts);
     totalCountsRef.current = initialCounts;
+    lastSessionTotalRef.current = 0;
     seenIds.current.clear();
     idMapping.current.clear();
     nextId.current = 1;
@@ -176,7 +178,7 @@ export const LiveDetectionProvider: React.FC<{ children: ReactNode }> = ({ child
     setSignalState(newSignal);
   }, [currentCounts]);
 
-  // Sync localStorage for SignalControl
+  // Sync localStorage for SignalControl & Dashboard
   useEffect(() => {
     if (isLiveStreaming || isModelActive) {
       localStorage.setItem('isLiveDetectionActive', 'true');
@@ -185,13 +187,74 @@ export const LiveDetectionProvider: React.FC<{ children: ReactNode }> = ({ child
     }
   }, [isLiveStreaming, isModelActive]);
 
+  // Sync Global Traffic Stats for Dashboard (Cumulative for Today)
+  useEffect(() => {
+     const currentSessionTotal = Object.values(totalCounts).reduce((a, b) => a + b, 0);
+     
+     // Calculate how many new vehicles were detected in this session cycle
+     const delta = currentSessionTotal - lastSessionTotalRef.current;
+     
+     // Update session tracker
+     lastSessionTotalRef.current = currentSessionTotal;
+
+     // Ignore if no increase (e.g., initial load or manual reset)
+     if (delta <= 0) return;
+
+     const now = new Date();
+     const todayKey = now.toISOString().split('T')[0];
+     const currentHour = now.getHours();
+
+     const stored = localStorage.getItem('traffic_stats');
+     let stats = stored ? JSON.parse(stored) : { date: todayKey, total: 0, hourly: {} };
+
+     // Reset if new day
+     if (stats.date !== todayKey) {
+        stats = { date: todayKey, total: 0, hourly: {} };
+     }
+
+     // Add ONLY the new detections since last update
+     stats.total += delta; 
+     if (!stats.hourly) stats.hourly = {};
+     stats.hourly[currentHour] = (stats.hourly[currentHour] || 0) + delta;
+
+     localStorage.setItem('traffic_stats', JSON.stringify(stats));
+     window.dispatchEvent(new CustomEvent('trafficStatsUpdate', { detail: stats }));
+  }, [totalCounts]);
+
   // WebSocket Logic
   useEffect(() => {
     if (isOnline) {
-       // Online Logic (Optional: Connect to backend stream for data not just video?)
-       // Currently Online is just MJPEG. If we want detection data, we might need WS too?
-       // Assuming Online is just viewing for now unless backend pushes data.
-       return; 
+      if (!isLiveStreaming) {
+        if (wsRef.current) {
+          wsRef.current.close();
+          wsRef.current = null;
+        }
+        return;
+      }
+
+      const ws = new WebSocket('ws://localhost:8000/ws/live-detection');
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        console.log('Connected to Live Model Data Stream');
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.detections) {
+            setDetections(data.detections);
+            updateStats(data.detections);
+          }
+          if (data.fps) setFps(data.fps);
+        } catch (e) {
+          console.error(e);
+        }
+      };
+
+      return () => {
+        if (ws.readyState === WebSocket.OPEN) ws.close();
+      };
     }
 
     if (!isModelActive) {
@@ -262,7 +325,7 @@ export const LiveDetectionProvider: React.FC<{ children: ReactNode }> = ({ child
       if (ws.readyState === WebSocket.OPEN) ws.close();
       cancelAnimationFrame(animationFrameId);
     };
-  }, [isModelActive, isOnline]);
+  }, [isModelActive, isOnline, isLiveStreaming]);
 
   // Handle Playback Controls
   const togglePlay = () => {

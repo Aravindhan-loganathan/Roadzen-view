@@ -97,9 +97,9 @@ export const LiveDetection: React.FC = () => {
           }
 
           // 2. Draw Detections
-          // Only if Model Active, or we just want to show them if they exist?
-          // If offline model active, or online...
-          if ((!isOnline && isModelActive) || (isOnline && isLiveStreaming && detections.length > 0)) {
+          // Only if Model Active (Offline mode). 
+          // In Online mode, the backend MJPEG stream is already annotated.
+          if (!isOnline && isModelActive && detections.length > 0) {
               detections.forEach(det => {
                 const [x, y, w, h] = det.box;
                 const color = getClassColor(det.label);

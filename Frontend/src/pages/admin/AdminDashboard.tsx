@@ -62,9 +62,7 @@ export const AdminDashboard: React.FC = () => {
             setVehiclesCount(stats.total || 0);
             if (stats.hourly) {
               const formatted = formatHourlyData(stats.hourly);
-              // Filter to reasonable hours (e.g. 6 AM to 10 PM) for better chart vis similar to mock
-              const filtered = formatted.filter((_, i) => i >= 6 && i <= 22);
-              setHourlyData(filtered);
+              setHourlyData(formatted);
             }
           } else {
             setVehiclesCount(0);
@@ -91,8 +89,7 @@ export const AdminDashboard: React.FC = () => {
         setVehiclesCount(e.detail.total || 0);
         if (e.detail.hourly) {
           const formatted = formatHourlyData(e.detail.hourly);
-          const filtered = formatted.filter((_, i) => i >= 6 && i <= 22);
-          setHourlyData(filtered);
+          setHourlyData(formatted);
         }
       }
     };

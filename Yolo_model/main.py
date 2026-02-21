@@ -20,6 +20,15 @@ os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp"
 model_lock = threading.Lock()
 active_camera = None
 
+# --- Global Live Detection Data ---
+# Stores the latest detection data for live streams
+live_detection_data = {
+    "detections": [],
+    "fps": 0,
+    "timestamp": 0
+}
+live_data_lock = threading.Lock()
+
 app = FastAPI()
 
 # Allow CORS for frontend connection
@@ -149,6 +158,36 @@ async def websocket_detection_endpoint(websocket: WebSocket):
             await websocket.close()
         except:
             pass
+
+# --- Live Detection Data (WebSocket) ---
+@app.websocket("/ws/live-detection")
+async def websocket_live_detection_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    print("Live Detection Data Client connected")
+    
+    try:
+        while True:
+            # Send the latest detection data
+            with live_data_lock:
+                data = {
+                    "detections": live_detection_data["detections"],
+                    "fps": live_detection_data["fps"]
+                }
+            
+            await websocket.send_json(data)
+            
+            # Send updates at ~30 FPS
+            await asyncio.sleep(0.033)
+            
+    except WebSocketDisconnect:
+        print("Live Detection Data Client disconnected")
+    except Exception as e:
+        print(f"Live Detection Data Error: {e}")
+        try:
+            await websocket.close()
+        except:
+            pass
+
 
 TARGET_WIDTH = 640
 
@@ -308,6 +347,9 @@ def live_stream_endpoint(url: str):
     camera = active_camera
 
     def generate():
+        frame_count = 0
+        start_time = time.time()
+        
         try:
             if not camera.running:
                  return # Exit if camera failed to start
@@ -335,6 +377,49 @@ def live_stream_endpoint(url: str):
                 
                 # Iterate to retrieve result and free memory
                 for result in results:
+                    # Extract detection data for WebSocket
+                    detections = []
+                    if result.boxes is not None:
+                        boxes = result.boxes.xywhn.cpu().numpy()
+                        classes = result.boxes.cls.cpu().numpy()
+                        confs = result.boxes.conf.cpu().numpy()
+                        
+                        if result.boxes.id is not None:
+                            track_ids = result.boxes.id.int().cpu().numpy()
+                        else:
+                            track_ids = [None] * len(boxes)
+                        
+                        names = result.names
+                        
+                        for i in range(len(boxes)):
+                            x_center, y_center, w, h = boxes[i]
+                            
+                            # Correct Bounding Box Logic: Convert center to Top-Left
+                            x = x_center - (w / 2)
+                            y = y_center - (h / 2)
+                            
+                            det = {
+                                "label": names[int(classes[i])],
+                                "conf": round(float(confs[i]), 2),
+                                "box": [float(x), float(y), float(w), float(h)]
+                            }
+                            
+                            if track_ids[i] is not None:
+                                det["id"] = int(track_ids[i])
+                                
+                            detections.append(det)
+                    
+                    # Calculate FPS
+                    frame_count += 1
+                    elapsed = time.time() - start_time
+                    fps = int(frame_count / elapsed) if elapsed > 0 else 0
+                    
+                    # Update global detection data
+                    with live_data_lock:
+                        live_detection_data["detections"] = detections
+                        live_detection_data["fps"] = fps
+                        live_detection_data["timestamp"] = time.time()
+                    
                     annotated_frame = result.plot()
 
                     # Encode to JPEG
@@ -354,6 +439,10 @@ def live_stream_endpoint(url: str):
         finally:
             # CRITICAL: This runs when frontend unmounts <img />
             camera.stop()
+            # Clear detection data
+            with live_data_lock:
+                live_detection_data["detections"] = []
+                live_detection_data["fps"] = 0
             print("Resources released for live stream.")
 
     return StreamingResponse(
