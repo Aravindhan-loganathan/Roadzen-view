@@ -52,6 +52,8 @@ interface Alert {
   impact?: string;
 }
 
+import { API_BASE_URL } from '@/services/apiConfig';
+
 export const AlertsPage: React.FC = () => {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [loading, setLoading] = useState(true);
@@ -61,7 +63,7 @@ export const AlertsPage: React.FC = () => {
   const fetchAlerts = async () => {
     try {
       const token = localStorage.getItem('traffic_token');
-      const response = await fetch('http://localhost:3000/api/alerts', {
+      const response = await fetch(`${API_BASE_URL}/alerts`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }

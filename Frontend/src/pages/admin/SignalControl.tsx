@@ -15,6 +15,8 @@ import { junctions } from '@/data/mockData';
 import { useLiveDetection } from '@/contexts/LiveDetectionContext';
 import { cn } from '@/lib/utils';
 
+import { API_BASE_URL } from '@/services/apiConfig';
+
 export const SignalControl: React.FC = () => {
   const { state } = useLocation();
   const [autoMode, setAutoMode] = useState(true);
@@ -53,7 +55,7 @@ export const SignalControl: React.FC = () => {
       const fetchSignal = async () => {
         try {
            const token = localStorage.getItem('traffic_token');
-           const res = await fetch('http://localhost:3000/api/signals', {
+           const res = await fetch(`${API_BASE_URL}/signals`, {
               headers: { Authorization: `Bearer ${token}` }
            });
            if(res.ok) {
@@ -119,7 +121,7 @@ export const SignalControl: React.FC = () => {
                derivedCongestion = 'low';
              }
              
-             await fetch(`http://localhost:3000/api/signals/${selectedJunction}`, {
+             await fetch(`${API_BASE_URL}/signals/${selectedJunction}`, {
                  method: 'PUT',
                  headers: { 
                     'Content-Type': 'application/json',

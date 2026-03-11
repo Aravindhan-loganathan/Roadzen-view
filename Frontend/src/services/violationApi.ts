@@ -1,4 +1,6 @@
-const BASE_URL = 'http://localhost:3000/api';
+import { API_BASE_URL } from './apiConfig';
+
+const BASE_URL = API_BASE_URL;
 
 export interface ViolationForm {
   type: string;

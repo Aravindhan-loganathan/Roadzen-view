@@ -27,6 +27,7 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { useLiveDetection, VehicleCounts } from '@/contexts/LiveDetectionContext';
+import { API_BASE_URL, AI_BASE_URL } from '@/services/apiConfig';
 
 export const LiveDetection: React.FC = () => {
   const {
@@ -303,7 +304,7 @@ export const LiveDetection: React.FC = () => {
                 // ONLINE VIEW (MJPEG)
                 isLiveStreaming ? (
                   <img
-                    src={`http://localhost:8000/live-stream?url=${encodeURIComponent(liveUrl)}`}
+                    src={`${AI_BASE_URL}/live-stream?url=${encodeURIComponent(liveUrl)}`}
                     alt="Live Detection Stream"
                     className="w-full h-full object-contain"
                   />

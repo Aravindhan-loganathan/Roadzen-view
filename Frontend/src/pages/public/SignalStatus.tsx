@@ -23,6 +23,8 @@ interface RouteSignalData {
     signalIds: number[];
 }
 
+import { API_BASE_URL } from '@/services/apiConfig';
+
 export const SignalStatus: React.FC = () => {
   const [signalData, setSignalData] = useState<JunctionData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -41,7 +43,7 @@ export const SignalStatus: React.FC = () => {
   const fetchSignals = async () => {
     try {
       const token = localStorage.getItem('traffic_token');
-      const response = await fetch('http://localhost:3000/api/signals', {
+      const response = await fetch(`${API_BASE_URL}/signals`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }

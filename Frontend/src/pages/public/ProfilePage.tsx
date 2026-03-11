@@ -7,6 +7,8 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/components/ui/use-toast';
 
+import { API_BASE_URL } from '@/services/apiConfig';
+
 export const ProfilePage: React.FC = () => {
   const { user, logout, updateUser } = useAuth();
   const { toast } = useToast();
@@ -48,7 +50,7 @@ export const ProfilePage: React.FC = () => {
     try {
       const token = localStorage.getItem('traffic_token');
       // Only sending 'name' to the backend as per requirement
-      const response = await fetch('http://localhost:3000/api/auth/profile', {
+      const response = await fetch(`${API_BASE_URL}/auth/profile`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -111,7 +113,7 @@ export const ProfilePage: React.FC = () => {
     setIsChangingPassword(true);
     try {
       const token = localStorage.getItem('traffic_token');
-      const response = await fetch('http://localhost:3000/api/auth/change-password', {
+      const response = await fetch(`${API_BASE_URL}/auth/change-password`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

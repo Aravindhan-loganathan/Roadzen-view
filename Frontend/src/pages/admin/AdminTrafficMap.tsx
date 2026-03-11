@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
+import { API_BASE_URL } from '@/services/apiConfig';
 import { useNavigate } from 'react-router-dom';
 import { Loader2, Plus, Info, Trash2, Save, X, Settings as SettingsIcon } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup, useMapEvents } from 'react-leaflet';
@@ -88,7 +89,7 @@ export const AdminTrafficMap: React.FC = () => {
   const fetchDashboardSummary = async () => {
     try {
       const token = localStorage.getItem('traffic_token');
-      const res = await fetch('http://localhost:3000/api/dashboard/summary', { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch(`${API_BASE_URL}/dashboard/summary`, { headers: { Authorization: `Bearer ${token}` } });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setDashboardStats({
@@ -107,7 +108,7 @@ export const AdminTrafficMap: React.FC = () => {
   const fetchEmergencyVehicles = async () => { 
     try {
       const token = localStorage.getItem('traffic_token');
-      const res = await fetch('http://localhost:3000/api/emergency-vehicles', {
+      const res = await fetch(`${API_BASE_URL}/emergency-vehicles`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -133,7 +134,7 @@ export const AdminTrafficMap: React.FC = () => {
 
     try {
       const token = localStorage.getItem('traffic_token');
-      const res = await fetch(`http://localhost:3000/api/emergency-vehicles/${id}`, {
+      const res = await fetch(`${API_BASE_URL}/emergency-vehicles/${id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -157,7 +158,7 @@ export const AdminTrafficMap: React.FC = () => {
   const fetchRoadblocks = async () => {
     try {
       const token = localStorage.getItem('traffic_token');
-      const res = await fetch('http://localhost:3000/api/roadblocks', {
+      const res = await fetch(`${API_BASE_URL}/roadblocks`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -182,7 +183,7 @@ export const AdminTrafficMap: React.FC = () => {
     }
     try {
       const token = localStorage.getItem('traffic_token');
-      const res = await fetch('http://localhost:3000/api/roadblocks', {
+      const res = await fetch(`${API_BASE_URL}/roadblocks`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -249,7 +250,7 @@ export const AdminTrafficMap: React.FC = () => {
         is_active: editingRoadblockForm.is_active,
       };
       console.debug('Updating roadblock', id, payload);
-      const res = await fetch(`http://localhost:3000/api/roadblocks/${id}`, {
+      const res = await fetch(`${API_BASE_URL}/roadblocks/${id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -295,7 +296,7 @@ export const AdminTrafficMap: React.FC = () => {
 
     try {
       const token = localStorage.getItem('traffic_token');
-      const res = await fetch(`http://localhost:3000/api/roadblocks/${id}`, {
+      const res = await fetch(`${API_BASE_URL}/roadblocks/${id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -322,7 +323,7 @@ export const AdminTrafficMap: React.FC = () => {
     }
     try {
       const token = localStorage.getItem('traffic_token');
-      const res = await fetch('http://localhost:3000/api/emergency-vehicles', {
+      const res = await fetch(`${API_BASE_URL}/emergency-vehicles`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -395,7 +396,7 @@ export const AdminTrafficMap: React.FC = () => {
         type: editingForm.type,
       };
       console.debug('Updating emergency vehicle', id, payload);
-      const res = await fetch(`http://localhost:3000/api/emergency-vehicles/${id}`, {
+      const res = await fetch(`${API_BASE_URL}/emergency-vehicles/${id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -439,7 +440,7 @@ export const AdminTrafficMap: React.FC = () => {
   const fetchSignals = async () => { 
     try {
       const token = localStorage.getItem('traffic_token');
-      const res = await fetch('http://localhost:3000/api/signals', {
+      const res = await fetch(`${API_BASE_URL}/signals`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -483,7 +484,7 @@ export const AdminTrafficMap: React.FC = () => {
   const handleUpdateCongestion = async (id: number, level: string) => {
     try {
       const token = localStorage.getItem('traffic_token');
-      const res = await fetch(`http://localhost:3000/api/signals/${id}`, {
+      const res = await fetch(`${API_BASE_URL}/signals/${id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -507,7 +508,7 @@ export const AdminTrafficMap: React.FC = () => {
     setIsDeleting(true);
     try {
       const token = localStorage.getItem('traffic_token');
-      const res = await fetch(`http://localhost:3000/api/signals/${id}`, {
+      const res = await fetch(`${API_BASE_URL}/signals/${id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -531,7 +532,7 @@ export const AdminTrafficMap: React.FC = () => {
     if (!newJunction || !formData.name) return;
     try {
       const token = localStorage.getItem('traffic_token');
-      const res = await fetch('http://localhost:3000/api/signals', {
+      const res = await fetch(`${API_BASE_URL}/signals`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { API_BASE_URL } from '@/services/apiConfig';
 import { Search, Navigation, Clock, MapPin, Route, Loader2, AlertTriangle, ArrowRight, Locate, Share2, Save, Star, Trash2, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -131,7 +132,7 @@ export const LiveMap: React.FC = () => {
     const fetchMarkers = async () => {
       try {
         const token = localStorage.getItem('traffic_token');
-        const response = await fetch('http://localhost:3000/api/signals', {
+        const response = await fetch(`${API_BASE_URL}/signals`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
@@ -160,7 +161,7 @@ export const LiveMap: React.FC = () => {
     const fetchEmergencyVehicles = async () => {
       try {
         const token = localStorage.getItem('traffic_token');
-        const res = await fetch('http://localhost:3000/api/emergency-vehicles', {
+        const res = await fetch(`${API_BASE_URL}/emergency-vehicles`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         if (res.ok) {
@@ -183,7 +184,7 @@ export const LiveMap: React.FC = () => {
     const fetchRoadblocks = async () => {
       try {
         const token = localStorage.getItem('traffic_token');
-        const res = await fetch('http://localhost:3000/api/roadblocks', {
+        const res = await fetch(`${API_BASE_URL}/roadblocks`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         if (res.ok) {
@@ -216,7 +217,7 @@ export const LiveMap: React.FC = () => {
   const fetchSavedLocations = async () => {
     try {
       const token = localStorage.getItem('traffic_token');
-      const response = await fetch('http://localhost:3000/api/saved-locations', {
+      const response = await fetch(`${API_BASE_URL}/saved-locations`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -495,7 +496,7 @@ export const LiveMap: React.FC = () => {
     
     try {
       const token = localStorage.getItem('traffic_token');
-      const response = await fetch('http://localhost:3000/api/saved-locations', {
+      const response = await fetch(`${API_BASE_URL}/saved-locations`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -540,7 +541,7 @@ export const LiveMap: React.FC = () => {
 
     try {
       const token = localStorage.getItem('traffic_token');
-      const response = await fetch(`http://localhost:3000/api/saved-locations/${id}`, {
+      const response = await fetch(`${API_BASE_URL}/saved-locations/${id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`

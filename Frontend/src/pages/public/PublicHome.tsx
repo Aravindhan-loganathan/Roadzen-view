@@ -41,6 +41,8 @@ interface HourlyData {
   rawHour?: number;
 }
 
+import { API_BASE_URL } from '@/services/apiConfig';
+
 export const PublicHome: React.FC = () => {
   const [data, setData] = useState<DashboardData | null>(null);
   const [vehiclesCount, setVehiclesCount] = useState<number>(0);
@@ -122,8 +124,8 @@ export const PublicHome: React.FC = () => {
         const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
 
         const [summaryRes, reportsRes] = await Promise.all([
-          fetch('http://localhost:3000/api/dashboard/summary', { headers }),
-          fetch('http://localhost:3000/api/reports/my?limit=1', { headers })
+          fetch(`${API_BASE_URL}/dashboard/summary`, { headers }),
+          fetch(`${API_BASE_URL}/reports/my?limit=1`, { headers })
         ]);
 
         if (summaryRes.ok) {

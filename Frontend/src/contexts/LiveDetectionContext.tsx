@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
+import { AI_WS_URL } from '@/services/apiConfig';
 
 // Common detection types
 export interface Detection {
@@ -232,7 +233,7 @@ export const LiveDetectionProvider: React.FC<{ children: ReactNode }> = ({ child
         return;
       }
 
-      const ws = new WebSocket('ws://localhost:8000/ws/live-detection');
+      const ws = new WebSocket(`${AI_WS_URL}/ws/live-detection`);
       wsRef.current = ws;
 
       ws.onopen = () => {
@@ -265,7 +266,7 @@ export const LiveDetectionProvider: React.FC<{ children: ReactNode }> = ({ child
       return;
     }
 
-    const ws = new WebSocket('ws://localhost:8000/ws/detection');
+    const ws = new WebSocket(`${AI_WS_URL}/ws/detection`);
     wsRef.current = ws;
     let animationFrameId: number;
 

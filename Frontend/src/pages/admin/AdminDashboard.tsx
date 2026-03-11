@@ -22,6 +22,8 @@ import {
   Cell,
 } from 'recharts';
 
+import { API_BASE_URL } from '@/services/apiConfig';
+
 export const AdminDashboard: React.FC = () => {
   const [summaryData, setSummaryData] = useState<any>(trafficSummary);
   /* State for Real-time Traffic Data */
@@ -113,7 +115,7 @@ export const AdminDashboard: React.FC = () => {
           return;
         }
 
-        const response = await fetch('http://localhost:3000/api/dashboard/summary', {
+        const response = await fetch(`${API_BASE_URL}/dashboard/summary`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
